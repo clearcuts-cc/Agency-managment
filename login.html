@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContentFlow - Login</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--bg-primary);
+            background-image: radial-gradient(circle at 20% 50%, rgba(79, 70, 229, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(124, 58, 237, 0.05) 0%, transparent 50%);
+            overflow: hidden;
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 420px;
+            padding: var(--spacing-2xl);
+            background: rgba(17, 17, 17, 0.6);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-2xl);
+            box-shadow: var(--shadow-xl);
+            position: relative;
+            z-index: 10;
+            animation: fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        @keyframes fade-up {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .brand-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto var(--spacing-md);
+            animation: pulse-glow 3s infinite;
+        }
+
+        .auth-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: var(--spacing-xs);
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .auth-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .auth-toggle {
+            display: flex;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px;
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--spacing-xl);
+            position: relative;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: var(--radius-md);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 2;
+        }
+
+        .toggle-btn.active {
+            color: white;
+            background: var(--bg-elevated);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .form-group {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xs);
+            margin-left: 2px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            color: white;
+            font-size: 0.95rem;
+            transition: var(--transition);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .btn-auth {
+            width: 100%;
+            margin-top: var(--spacing-sm);
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        .auth-footer {
+            margin-top: var(--spacing-xl);
+            text-align: center;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .auth-link {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .auth-link:hover {
+            color: var(--color-purple);
+            text-decoration: underline;
+        }
+
+        /* Error Message */
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            color: #EF4444;
+            padding: 10px;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            text-align: center;
+            margin-bottom: var(--spacing-lg);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            display: none;
+            animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+
+        @keyframes shake {
+
+            10%,
+            90% {
+                transform: translate3d(-1px, 0, 0);
+            }
+
+            20%,
+            80% {
+                transform: translate3d(2px, 0, 0);
+            }
+
+            30%,
+            50%,
+            70% {
+                transform: translate3d(-4px, 0, 0);
+            }
+
+            40%,
+            60% {
+                transform: translate3d(4px, 0, 0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <div class="brand-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                </svg>
+            </div>
+            <h1 class="auth-title">Welcome Back</h1>
+            <p class="auth-subtitle">Sign in to continue to ContentFlow</p>
+        </div>
+
+        <div class="auth-toggle">
+            <button class="toggle-btn active" id="btn-login">Log In</button>
+            <button class="toggle-btn" id="btn-signup">Sign Up</button>
+        </div>
+
+        <div class="error-message" id="auth-error"></div>
+
+        <form id="auth-form">
+            <div class="form-group" id="name-group" style="display: none;">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-input" id="auth-name" placeholder="John Doe">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" class="form-input" id="auth-email" placeholder="name@company.com" required>
+            </div>
+
+            <div class="form-group password-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="auth-password" placeholder="••••••••" required>
+                <span class="password-toggle login-password-toggle"
+                    onclick="togglePasswordVisibility('auth-password', this)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </span>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-auth">Log In</button>
+        </form>
+
+        <div class="auth-footer">
+            <p id="toggle-text">Don't have an account? <span class="auth-link" id="toggle-link">Sign up</span></p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/supabase-service.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        function togglePasswordVisibility(inputId, toggleEl) {
+            const input = document.getElementById(inputId);
+            const isPassword = input.getAttribute('type') === 'password';
+            input.setAttribute('type', isPassword ? 'text' : 'password');
+
+            // Toggle SVG icon
+            if (isPassword) {
+                toggleEl.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>`;
+            } else {
+                toggleEl.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>`;
+            }
+        }
+
+        const loginBtn = document.getElementById('btn-login');
+        const signupBtn = document.getElementById('btn-signup');
+        const nameGroup = document.getElementById('name-group');
+        const formTitle = document.querySelector('.auth-title');
+        const formSubtitle = document.querySelector('.auth-subtitle');
+        const submitBtn = document.querySelector('.btn-auth');
+        const toggleLink = document.getElementById('toggle-link');
+        const toggleText = document.getElementById('toggle-text');
+        const authForm = document.getElementById('auth-form');
+        const errorMessage = document.getElementById('auth-error');
+
+        let isLogin = true;
+
+        function toggleMode(mode) {
+            isLogin = mode === 'login';
+
+            if (isLogin) {
+                // Login Mode
+                loginBtn.classList.add('active');
+                signupBtn.classList.remove('active');
+                nameGroup.style.display = 'none';
+                document.getElementById('auth-name').required = false;
+                formTitle.textContent = 'Welcome Back';
+                formSubtitle.textContent = 'Sign in to continue to ContentFlow';
+                submitBtn.textContent = 'Log In';
+                toggleText.innerHTML = 'Don\'t have an account? <span class="auth-link" id="toggle-link">Sign up</span>';
+            } else {
+                // Signup Mode
+                signupBtn.classList.add('active');
+                loginBtn.classList.remove('active');
+                nameGroup.style.display = 'block';
+                document.getElementById('auth-name').required = true;
+                formTitle.textContent = 'Create Account';
+                formSubtitle.textContent = 'Join your team on ContentFlow';
+                submitBtn.textContent = 'Sign Up';
+                toggleText.innerHTML = 'Already have an account? <span class="auth-link" id="toggle-link">Log in</span>';
+            }
+
+            // Re-attach listener to dynamic link
+            document.getElementById('toggle-link').addEventListener('click', () => {
+                toggleMode(isLogin ? 'signup' : 'login');
+            });
+
+            errorMessage.style.display = 'none';
+        }
+
+        loginBtn.addEventListener('click', () => toggleMode('login'));
+        signupBtn.addEventListener('click', () => toggleMode('signup'));
+        toggleLink.addEventListener('click', () => toggleMode('signup'));
+
+        // Listen for Supabase Auth Changes (e.g., from email link)
+        if (typeof supabase !== 'undefined' && supabase) {
+            supabase.auth.onAuthStateChange(async (event, session) => {
+                if (event === 'SIGNED_IN' && session) {
+                    console.log('Supabase Auth Event:', event);
+
+                    const user = session.user;
+
+                    // STRICT VERIFICATION CHECK: Stop unverified users
+                    if (!user.email_confirmed_at) {
+                        console.log('Unverified user attempt blocked.');
+                        await supabase.auth.signOut();
+                        alert('Your email is not verified yet. Please click the link in your email to continue.');
+                        return;
+                    }
+
+                    const role = user.user_metadata.role;
+
+                    // ADMIN: Require manual login after email verification link
+                    const isEmailHashLink = window.location.hash && window.location.hash.includes('access_token');
+
+                    if (role === 'Admin' && isEmailHashLink) {
+                        console.log('Admin verified email. Requiring manual login.');
+                        await supabase.auth.signOut(); // Kill the auto-session
+
+                        // Clear URL hash to prevent loop if reloaded and clean up URL
+                        history.replaceState(null, null, 'login.html');
+
+                        alert('Email verified successfully! Please log in with your password.');
+
+                        // Pre-fill email
+                        const emailField = document.getElementById('auth-email');
+                        if (emailField) emailField.value = user.email;
+                        return;
+                    }
+
+                    // STANDARD FLOW (Employees, Clients, Admin-Manual-Login)
+                    // Sync with our local storage auth system
+                    const appUser = {
+                        id: user.id,
+                        email: user.email,
+                        name: user.user_metadata.full_name || user.email.split('@')[0],
+                        avatar: Auth.getInitials(user.user_metadata.full_name || user.email),
+                        role: role || 'Employee'
+                    };
+
+                    localStorage.setItem('contentflow_current_user', JSON.stringify(appUser));
+                    window.location.href = 'index.html';
+                }
+            });
+        }
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const name = document.getElementById('auth-name').value;
+
+            errorMessage.style.display = 'none';
+            errorMessage.textContent = '';
+
+            try {
+                if (isLogin) {
+                    const result = await Auth.login(email, password);
+                    console.log('Login Result:', result);
+                    if (result.success) {
+                        window.location.href = 'index.html';
+                    } else {
+                        errorMessage.textContent = result.message || 'Invalid email or password';
+                        errorMessage.style.display = 'block';
+                    }
+                } else {
+                    const result = await Auth.signup(name, email, password);
+                    console.log('Signup Result:', result);
+
+                    if (result.success) {
+                        // Check if we got a success message (Verification Required)
+                        if (result.message && result.message.toLowerCase().includes('email')) {
+                            // Show success message clearly
+                            const feedback = document.createElement('div');
+                            feedback.className = 'signup-feedback'; // Use a class for easier styling if needed
+                            feedback.style.cssText = 'color: #10B981; background: rgba(16, 185, 129, 0.1); padding: 1.5rem; border-radius: 8px; margin-top: 1rem; text-align: center; border: 1px solid rgba(16, 185, 129, 0.2);';
+
+                            feedback.innerHTML = `
+                                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📩</div>
+                                <div style="font-weight: 600; margin-bottom: 0.5rem;">Verification Email Sent!</div>
+                                <div style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.4;">
+                                    ${result.message}<br><br>
+                                    <small>Note: Check your spam folder if you don't see it within a minute.</small>
+                                </div>
+                            `;
+
+                            authForm.innerHTML = '';
+                            authForm.appendChild(feedback);
+
+                            const backBtn = document.createElement('button');
+                            backBtn.textContent = 'Return to Login';
+                            backBtn.className = 'btn btn-primary';
+                            backBtn.style.marginTop = '1.5rem';
+                            backBtn.style.width = '100%';
+                            backBtn.onclick = () => window.location.reload();
+                            authForm.appendChild(backBtn);
+                        } else {
+                            // This would happen if auto-confirm is ON in dashboard
+                            window.location.href = 'index.html';
+                        }
+                    } else {
+                        // Show the ACTUAL error from Supabase/Backend
+                        errorMessage.textContent = result.message || 'Signup failed. Please try again.';
+                        errorMessage.style.display = 'block';
+                    }
+                }
+            } catch (err) {
+                console.error('Auth Error:', err);
+                errorMessage.textContent = 'An unexpected error occurred.';
+                errorMessage.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+
+</html>
