@@ -73,8 +73,7 @@ window.SupabaseService = {
                     id: data.user.id,
                     email: email,
                     name: name,
-                    role: 'Employee',
-                    joined: new Date().toISOString()
+                    role: 'Employee'
                 }]);
             if (insertError) console.warn('Error inserting to public users table:', insertError);
         }
@@ -113,8 +112,7 @@ window.SupabaseService = {
                     id: data.user.id,
                     email: email,
                     name: name,
-                    role: 'Client',
-                    joined: new Date().toISOString()
+                    role: 'Client'
                 }]);
             if (insertError) console.warn('Error inserting client to public users table:', insertError);
         }
@@ -165,8 +163,7 @@ window.SupabaseService = {
             email: user.email,
             name: user.name || user.full_name,
             avatar: user.avatar,
-            role: user.role || 'Employee',
-            joined: user.joined || new Date().toISOString()
+            role: user.role || 'Employee'
         };
 
         const { data, error } = await window.supabase

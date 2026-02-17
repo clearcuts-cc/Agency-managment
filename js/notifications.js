@@ -211,7 +211,38 @@ const NotificationService = {
 
         // Actions
         const actions = document.createElement('div');
-        actions.style.cssText = 'display: flex; gap: var(--spacing-sm); align-items: center;';
+        actions.style.cssText = 'display: flex; gap: var(--spacing-sm); align-items: center; flex-wrap: wrap;';
+
+        // Special action for password reset requests
+        if (notification.type === 'password_reset_request' && notification.related_id) {
+            const resetBtn = document.createElement('button');
+            resetBtn.textContent = 'Reset Password';
+            resetBtn.style.cssText = `
+                padding: var(--spacing-xs) var(--spacing-sm);
+                background: var(--accent-blue);
+                border: 1px solid var(--accent-blue);
+                border-radius: var(--radius-sm);
+                color: white;
+                font-size: 0.75rem;
+                cursor: pointer;
+                transition: var(--transition);
+                font-weight: 500;
+            `;
+            resetBtn.addEventListener('click', async () => {
+                if (confirm('Send password reset email to this employee?')) {
+                    await this.handlePasswordReset(notification.related_id, notification.id);
+                }
+            });
+            resetBtn.addEventListener('mouseenter', function () {
+                this.style.background = 'var(--color-purple)';
+                this.style.borderColor = 'var(--color-purple)';
+            });
+            resetBtn.addEventListener('mouseleave', function () {
+                this.style.background = 'var(--accent-blue)';
+                this.style.borderColor = 'var(--accent-blue)';
+            });
+            actions.appendChild(resetBtn);
+        }
 
         if (!notification.is_read) {
             const markReadBtn = document.createElement('button');
@@ -277,6 +308,44 @@ const NotificationService = {
         card.appendChild(actions);
 
         return card;
+    },
+
+    async handlePasswordReset(employeeUserId, notificationId) {
+        if (!Storage.isSupabaseActive()) {
+            alert('Supabase is not connected');
+            return;
+        }
+
+        try {
+            // Get employee email
+            const { data: employee, error: fetchError } = await window.supabase
+                .from('users')
+                .select('email, name')
+                .eq('id', employeeUserId)
+                .single();
+
+            if (fetchError || !employee) {
+                alert('Employee not found');
+                return;
+            }
+
+            // Send password reset email
+            const redirectUrl = window.location.origin + '/Agency managment/login.html';
+            const { error: resetError } = await window.supabase.auth.resetPasswordForEmail(
+                employee.email,
+                { redirectTo: redirectUrl }
+            );
+
+            if (resetError) throw resetError;
+
+            // Mark notification as read
+            await this.markAsRead(notificationId);
+
+            alert(`Password reset email sent to ${employee.name} (${employee.email})`);
+        } catch (error) {
+            console.error('Error sending password reset:', error);
+            alert('Failed to send password reset email. Please try again.');
+        }
     },
 
     formatTimestamp(timestamp) {
