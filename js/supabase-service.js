@@ -303,6 +303,25 @@ window.SupabaseService = {
 
         if (error) throw error;
 
+        // Create notification for the assigned employee if different from creator
+        if (task.assigneeId && user && task.assigneeId !== user.id) {
+            try {
+                await window.supabase
+                    .from('notifications')
+                    .insert([{
+                        user_id: task.assigneeId,
+                        message: `New task assigned: ${task.title}`,
+                        type: 'task_assigned',
+                        related_id: data.id,
+                        is_read: false
+                    }]);
+                console.log(`Notification sent to employee ${task.assigneeId} for task: ${task.title}`);
+            } catch (notifError) {
+                console.error('Error creating notification:', notifError);
+                // Don't fail the task creation if notification fails
+            }
+        }
+
         // Map back to camelCase for the app
         return {
             ...data,

@@ -738,17 +738,7 @@ const NewApp = {
             createdBy: currentUser.id
         });
 
-        // Send Notification to Employee (Red Dot)
-        if (assigneeId !== currentUser.id) {
-            if (typeof NotificationService !== 'undefined') {
-                await NotificationService.createNotification(
-                    assigneeId,
-                    `New Task: ${title}`,
-                    'info',
-                    { taskId: title }
-                );
-            }
-        }
+        // Notification is now created automatically in SupabaseService.addTask()
 
         this.closeModal('task-modal');
         NewCalendar.refresh();
