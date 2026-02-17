@@ -8,7 +8,7 @@ window.SupabaseService = {
         } else if (url.endsWith('/')) {
             url = url.substring(0, url.length - 1);
         }
-        return url + '/login.html';
+        return url + '/reset-password.html';
     },
 
     // === AUTH ===

@@ -1,6 +1,17 @@
 // Forgot Password Handler
 
 class ForgotPassword {
+    // Helper to get absolute redirect URL
+    static _getRedirectUrl() {
+        let url = window.location.href.split('?')[0].split('#')[0];
+        if (url.endsWith('.html')) {
+            url = url.substring(0, url.lastIndexOf('/'));
+        } else if (url.endsWith('/')) {
+            url = url.substring(0, url.length - 1);
+        }
+        return url + '/reset-password.html';
+    }
+
     static async handleForgotPassword(email) {
         const messageBox = document.getElementById('message-box');
 
@@ -78,7 +89,7 @@ class ForgotPassword {
         if (!window.supabase) throw new Error('Supabase not initialized');
 
         // Get the redirect URL for password reset
-        const redirectUrl = window.location.origin + '/Agency managment/login.html';
+        const redirectUrl = this._getRedirectUrl();
 
         const { error } = await window.supabase.auth.resetPasswordForEmail(email, {
             redirectTo: redirectUrl
