@@ -1,7 +1,7 @@
 // Use window.SupabaseService to ensure it's accessible globally across script tags
 window.SupabaseService = {
-    // Helper to get absolute path for redirects (handles subdirectories correctly)
-    _getRedirectUrl() {
+    // Helper to get absolute path for password reset redirects
+    _getPasswordResetUrl() {
         let url = window.location.href.split('?')[0].split('#')[0];
         if (url.endsWith('.html')) {
             url = url.substring(0, url.lastIndexOf('/'));
@@ -9,6 +9,17 @@ window.SupabaseService = {
             url = url.substring(0, url.length - 1);
         }
         return url + '/reset-password.html';
+    },
+
+    // Helper to get absolute path for signup email verification redirects
+    _getSignupRedirectUrl() {
+        let url = window.location.href.split('?')[0].split('#')[0];
+        if (url.endsWith('.html')) {
+            url = url.substring(0, url.lastIndexOf('/'));
+        } else if (url.endsWith('/')) {
+            url = url.substring(0, url.length - 1);
+        }
+        return url + '/index.html';
     },
 
     // === AUTH ===
@@ -59,7 +70,7 @@ window.SupabaseService = {
             password,
             options: {
                 data: { full_name: name, role: 'Employee' },
-                emailRedirectTo: this._getRedirectUrl()
+                emailRedirectTo: this._getSignupRedirectUrl()
             }
         });
 
@@ -98,7 +109,7 @@ window.SupabaseService = {
             password,
             options: {
                 data: { full_name: name, role: 'Client' },
-                emailRedirectTo: this._getRedirectUrl()
+                emailRedirectTo: this._getSignupRedirectUrl()
             }
         });
 

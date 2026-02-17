@@ -330,7 +330,7 @@ const NotificationService = {
             }
 
             // Send password reset email
-            const redirectUrl = window.SupabaseService._getRedirectUrl();
+            const redirectUrl = window.SupabaseService._getPasswordResetUrl();
             const { error: resetError } = await window.supabase.auth.resetPasswordForEmail(
                 employee.email,
                 { redirectTo: redirectUrl }
