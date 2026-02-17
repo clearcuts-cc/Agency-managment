@@ -301,7 +301,7 @@ body {
 /* ===== Main Content ===== */
 .main-content {
     padding: 0 var(--spacing-2xl) var(--spacing-2xl);
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
 }
 
@@ -359,39 +359,44 @@ body {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-xl);
-    padding: var(--spacing-xl);
+    padding: var(--spacing-2xl);
+    max-width: 100%;
 }
 
 .calendar-weekdays {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
 }
 
 .weekday-label {
     text-align: center;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-secondary);
-    padding: var(--spacing-sm);
+    padding: var(--spacing-md);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: var(--spacing-sm);
+    gap: var(--spacing-md);
 }
 
 .calendar-day-cell {
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    min-height: 120px;
-    padding: var(--spacing-sm);
+    min-height: 150px;
+    padding: var(--spacing-md);
     position: relative;
     transition: var(--transition);
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
 }
 
 .calendar-day-cell:hover {
@@ -408,8 +413,20 @@ body {
     border-width: 2px;
 }
 
+.calendar-day-cell.empty-cell {
+    background: transparent;
+    border: none;
+    cursor: default;
+    pointer-events: none;
+}
+
+.calendar-day-cell.empty-cell:hover {
+    border-color: transparent;
+    background: transparent;
+}
+
 .day-number {
-    font-size: 0.875rem;
+    font-size: 1.125rem;
     font-weight: 600;
     margin-bottom: var(--spacing-sm);
     color: var(--text-primary);
@@ -858,6 +875,12 @@ body {
         0 0 25px rgba(79, 70, 229, 0.25),
         inset 0 2px 4px rgba(0, 0, 0, 0.3);
     transform: translateY(-2px);
+}
+
+/* Fix visibility of dropdown options on Windows */
+select option {
+    background-color: #111;
+    color: #fff;
 }
 
 /* Overriding Browser Autofill HARD */

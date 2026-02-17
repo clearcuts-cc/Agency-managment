@@ -417,12 +417,12 @@ const NewApp = {
                 return;
             }
 
-            // 6. User Profile -> Settings
+            // 6. User Profile -> Profile Page
             const profile = target.closest('#sidebar-user-profile') || target.closest('.user-mini-profile');
             // Ensure we are not clicking logout or notification bell inside profile
             if (profile && !target.closest('#notification-bell')) {
                 e.preventDefault();
-                this.handleNavigation('settings');
+                this.handleNavigation('profile');
                 this.loadSettings();
                 return;
             }
@@ -466,6 +466,7 @@ const NewApp = {
             });
         }
 
+
         // Tag close buttons too
         document.querySelectorAll('.modal-close').forEach(btn => btn.classList.add('modal-close'));
     },
@@ -478,7 +479,8 @@ const NewApp = {
             console.log(`Opening modal: ${modalId}`);
 
             if (modalId === 'task-modal') {
-                this.populateTaskDropdowns();
+                // Force re-populate every time to catch new employees/clients
+                this.populateTaskDropdowns().catch(console.error);
             }
         } else {
             console.error(`Modal not found: ${modalId}`);
@@ -487,7 +489,7 @@ const NewApp = {
 
     async populateTaskDropdowns() {
         const user = Auth.getCurrentUser();
-        const role = (user && user.role) ? user.role.toLowerCase() : 'admin'; // Default to admin for safety in this check
+        const role = (user && user.role) ? user.role.toLowerCase() : 'admin';
         const isAdmin = role === 'admin';
 
         console.log('Populating Dropdowns - User Role:', role, 'isAdmin:', isAdmin);
@@ -497,40 +499,34 @@ const NewApp = {
         const assigneeSelect = document.getElementById('task-assignee');
 
         if (assigneeGroup && assigneeSelect) {
-            // ALWAYS SHOW for now if we are debugging why it's missing, 
-            // but let's stick to the Admin requirement and just make it more reliable.
             if (isAdmin) {
                 assigneeGroup.style.setProperty('display', 'block', 'important');
                 assigneeSelect.innerHTML = '<option value="">Select Employee</option>';
 
-                let employees = [];
                 try {
-                    if (window.SupabaseService && window.supabase) {
-                        const allUsers = await window.SupabaseService.getUsers();
-                        employees = allUsers.filter(u => u.role && u.role.toLowerCase() === 'employee');
+                    let employees = await Storage.getEmployees();
+                    console.log('Employees found:', employees.length);
+
+                    if (employees.length === 0) {
+                        const option = document.createElement('option');
+                        option.value = "";
+                        option.textContent = "No Employees Found";
+                        assigneeSelect.appendChild(option);
                     } else {
-                        // Fallback to local storage
-                        const localUsers = JSON.parse(localStorage.getItem('contentflow_users')) || [];
-                        employees = localUsers.filter(u => u.role && u.role.toLowerCase() === 'employee');
+                        employees.forEach(emp => {
+                            const option = document.createElement('option');
+                            option.value = emp.id;
+                            option.textContent = emp.name;
+                            assigneeSelect.appendChild(option);
+                        });
                     }
+
+
                 } catch (error) {
                     console.error('Error fetching employees:', error);
-                    const localUsers = JSON.parse(localStorage.getItem('contentflow_users')) || [];
-                    employees = localUsers.filter(u => u.role && u.role.toLowerCase() === 'employee');
-                }
-
-                if (employees.length === 0) {
                     const option = document.createElement('option');
-                    option.value = "";
-                    option.textContent = "No Employees Found (Add them in Team)";
+                    option.textContent = "Error loading employees";
                     assigneeSelect.appendChild(option);
-                } else {
-                    employees.forEach(emp => {
-                        const option = document.createElement('option');
-                        option.value = emp.id;
-                        option.textContent = emp.name;
-                        assigneeSelect.appendChild(option);
-                    });
                 }
             } else {
                 assigneeGroup.style.display = 'none';
@@ -542,11 +538,13 @@ const NewApp = {
         if (clientSelect) {
             clientSelect.innerHTML = '<option value="">Select Client</option>';
             try {
-                const clients = await Storage.getClients();
+                let clients = await Storage.getClients();
+                console.log('Clients found:', clients.length);
+
                 if (clients.length === 0) {
                     const option = document.createElement('option');
                     option.value = "";
-                    option.textContent = "No Clients Found (Add them in Clients)";
+                    option.textContent = "No Clients Found";
                     clientSelect.appendChild(option);
                 } else {
                     clients.forEach(client => {
@@ -556,8 +554,13 @@ const NewApp = {
                         clientSelect.appendChild(option);
                     });
                 }
+
+
             } catch (error) {
                 console.error('Error fetching clients:', error);
+                const option = document.createElement('option');
+                option.textContent = "Error loading clients";
+                clientSelect.appendChild(option);
             }
         }
     },
@@ -597,6 +600,10 @@ const NewApp = {
                 this.renderTasks();
             } else if (pageId === 'client-approvals') {
                 this.renderTeamPage();
+            } else if (pageId === 'profile') {
+                this.loadSettings(); // loadSettings updates the profile inputs
+            } else if (pageId === 'notifications') {
+                NotificationService.initializeNotificationsPage();
             }
         }
     },
@@ -711,7 +718,8 @@ const NewApp = {
             const assigneeSelect = document.getElementById('task-assignee');
             if (assigneeSelect && assigneeSelect.value) {
                 assigneeId = assigneeSelect.value;
-                assigneeName = assigneeSelect.options[assigneeSelect.selectedIndex].text;
+                const selectedOption = assigneeSelect.options[assigneeSelect.selectedIndex];
+                assigneeName = selectedOption ? selectedOption.text : currentUser.name;
             }
         }
 
@@ -1047,26 +1055,18 @@ const NewApp = {
     async renderTeamPage() {
         const empContainer = document.getElementById('employee-list-container');
         const clientContainer = document.getElementById('client-list-container');
+        const currentUser = Auth.getCurrentUser();
+        const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
 
         if (!empContainer && !clientContainer) return;
 
         // Employees
         if (empContainer) {
             let employees = [];
-
-            if (typeof SupabaseService !== 'undefined' && window.supabase) {
-                try {
-                    const allUsers = await SupabaseService.getUsers();
-                    employees = allUsers.filter(u => u.role && u.role.toLowerCase() === 'employee');
-                } catch (error) {
-                    console.error('Failed to fetch users from Supabase:', error);
-                    // Fallback to local
-                    const allUsers = JSON.parse(localStorage.getItem('contentflow_users')) || [];
-                    employees = allUsers.filter(u => u.role && u.role.toLowerCase() === 'employee');
-                }
-            } else {
-                const allUsers = JSON.parse(localStorage.getItem('contentflow_users')) || [];
-                employees = allUsers.filter(u => u.role && u.role.toLowerCase() === 'employee');
+            try {
+                employees = await Storage.getEmployees();
+            } catch (error) {
+                console.error('Failed to fetch employees for Team Page:', error);
             }
 
             if (employees.length === 0) {
@@ -1089,6 +1089,16 @@ const NewApp = {
                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
                                 </svg>
                              </button>
+                             ${isAdmin ? `
+                             <button class="action-btn delete" onclick="NewApp.deleteEmployee('${emp.id}', '${emp.name}')" title="Delete Employee" style="color: #ef4444;">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                                </svg>
+                             </button>
+                             ` : ''}
                         </div>
                     </div>
                 `;
@@ -1116,6 +1126,16 @@ const NewApp = {
                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
                                 </svg>
                              </button>
+                             ${isAdmin ? `
+                             <button class="action-btn delete" onclick="NewApp.deleteClient('${client.id}', '${client.name}')" title="Delete Client" style="color: #ef4444;">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                                </svg>
+                             </button>
+                             ` : ''}
                         </div>
                     </div>
                  `).join('');
@@ -1346,6 +1366,32 @@ const NewApp = {
         } catch (error) {
             console.error('Failed to update client:', error);
             this.showNotification('Error updating client: ' + error.message, 'error');
+        }
+    },
+
+    async deleteEmployee(id, name) {
+        if (!confirm(`Are you sure you want to delete employee "${name}"? This action cannot be undone.`)) return;
+
+        try {
+            await Storage.deleteEmployee(id);
+            this.showNotification(`Employee ${name} deleted successfully`);
+            this.renderTeamPage();
+        } catch (error) {
+            console.error('Error deleting employee:', error);
+            this.showNotification('Failed to delete employee: ' + error.message, 'error');
+        }
+    },
+
+    async deleteClient(id, name) {
+        if (!confirm(`Are you sure you want to delete client "${name}"? This action cannot be undone.`)) return;
+
+        try {
+            await Storage.deleteClient(id);
+            this.showNotification(`Client ${name} deleted successfully`);
+            this.renderTeamPage();
+        } catch (error) {
+            console.error('Error deleting client:', error);
+            this.showNotification('Failed to delete client: ' + error.message, 'error');
         }
     },
 

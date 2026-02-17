@@ -372,8 +372,16 @@
                         email: user.email,
                         name: user.user_metadata.full_name || user.email.split('@')[0],
                         avatar: Auth.getInitials(user.user_metadata.full_name || user.email),
-                        role: role || 'Employee'
+                        role: role || 'Employee',
+                        joined: user.created_at || new Date().toISOString()
                     };
+
+                    // ENSURE they are in the public users table so they show up in the app
+                    try {
+                        await SupabaseService.upsertUser(appUser);
+                    } catch (e) {
+                        console.warn('Silent upsert failed during login flow:', e);
+                    }
 
                     localStorage.setItem('contentflow_current_user', JSON.stringify(appUser));
                     window.location.href = 'index.html';

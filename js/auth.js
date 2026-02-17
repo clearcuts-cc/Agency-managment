@@ -1,15 +1,9 @@
 class Auth {
     static init() {
         this.users = JSON.parse(localStorage.getItem('contentflow_users')) || [];
-        this.currentUser = JSON.parse(localStorage.getItem('contentflow_current_user'));
-
-        // FORCE CLEANUP: If we are using Supabase, clear the old local data 
-        // that is causing the "Already Registered" ghost error.
-        if (window.supabase) {
-            console.log('Supabase mode active: Clearing stale local user data.');
-            localStorage.removeItem('contentflow_users');
-            this.users = [];
-        }
+        // Support legacy user object
+        const legacyUser = JSON.parse(localStorage.getItem('contentflow_current_user'));
+        if (legacyUser) this.currentUser = legacyUser;
     }
 
     static async signup(name, email, password) {

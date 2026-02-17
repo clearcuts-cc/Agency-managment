@@ -1,5 +1,16 @@
 // Use window.SupabaseService to ensure it's accessible globally across script tags
 window.SupabaseService = {
+    // Helper to get absolute path for redirects (handles subdirectories correctly)
+    _getRedirectUrl() {
+        let url = window.location.href.split('?')[0].split('#')[0];
+        if (url.endsWith('.html')) {
+            url = url.substring(0, url.lastIndexOf('/'));
+        } else if (url.endsWith('/')) {
+            url = url.substring(0, url.length - 1);
+        }
+        return url + '/login.html';
+    },
+
     // === AUTH ===
     async signUp(email, password, name) {
         if (!window.supabase) {
@@ -10,18 +21,26 @@ window.SupabaseService = {
             password,
             options: {
                 data: { full_name: name, role: 'Admin' },
-                emailRedirectTo: window.location.origin + '/login.html'
+                emailRedirectTo: this._getRedirectUrl()
             }
         });
         if (error) throw error;
+
+        // Upsert into public table immediately
+        if (data && data.user) {
+            await this.upsertUser({
+                id: data.user.id,
+                email: email,
+                name: name,
+                role: 'Admin'
+            });
+        }
+
         return data;
     },
 
     // Special method to create an employee WITHOUT logging out the current admin
     async createEmployee(email, password, name) {
-        // Create a separate, temporary Supabase client instance
-        // to avoid logging out the admin.
-        // Use the globally preserved factory function, or try to find it on window.supabase (Library)
         const createClientFn = window.supabaseCreateClient ||
             (typeof createClient !== 'undefined' ? createClient : null) ||
             (window.supabase && window.supabase.createClient);
@@ -40,11 +59,26 @@ window.SupabaseService = {
             password,
             options: {
                 data: { full_name: name, role: 'Employee' },
-                emailRedirectTo: window.location.origin + '/login.html'
+                emailRedirectTo: this._getRedirectUrl()
             }
         });
 
         if (error) throw error;
+
+        // CRITICAL: Manually insert into public users table so they appear in the app
+        if (data && data.user) {
+            const { error: insertError } = await window.supabase
+                .from('users')
+                .insert([{
+                    id: data.user.id,
+                    email: email,
+                    name: name,
+                    role: 'Employee',
+                    joined: new Date().toISOString()
+                }]);
+            if (insertError) console.warn('Error inserting to public users table:', insertError);
+        }
+
         return data;
     },
 
@@ -65,11 +99,26 @@ window.SupabaseService = {
             password,
             options: {
                 data: { full_name: name, role: 'Client' },
-                emailRedirectTo: window.location.origin + '/login.html'
+                emailRedirectTo: this._getRedirectUrl()
             }
         });
 
         if (error) throw error;
+
+        // CRITICAL: Manually insert into public users table
+        if (data && data.user) {
+            const { error: insertError } = await window.supabase
+                .from('users')
+                .insert([{
+                    id: data.user.id,
+                    email: email,
+                    name: name,
+                    role: 'Client',
+                    joined: new Date().toISOString()
+                }]);
+            if (insertError) console.warn('Error inserting client to public users table:', insertError);
+        }
+
         return data;
     },
 
@@ -103,6 +152,32 @@ window.SupabaseService = {
             .order('name', { ascending: true });
 
         if (error) throw error;
+        return data;
+    },
+
+    // Manually insert/update user in public table (Backup if Triggers fail)
+    async upsertUser(user) {
+        if (!window.supabase) return;
+
+        // Prepare data matching table schema
+        const userData = {
+            id: user.id,
+            email: user.email,
+            name: user.name || user.full_name,
+            avatar: user.avatar,
+            role: user.role || 'Employee',
+            joined: user.joined || new Date().toISOString()
+        };
+
+        const { data, error } = await window.supabase
+            .from('users')
+            .upsert([userData], { onConflict: 'email' })
+            .select();
+
+        if (error) {
+            console.error('Error upserting user:', error);
+            throw error;
+        }
         return data;
     },
 
@@ -252,6 +327,26 @@ window.SupabaseService = {
             .delete()
             .eq('id', id);
 
+        if (error) throw error;
+        return true;
+    },
+
+    async deleteUser(id) {
+        if (!window.supabase) throw new Error('Supabase not initialized');
+        const { error } = await window.supabase
+            .from('users')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+        return true;
+    },
+
+    async deleteClient(id) {
+        if (!window.supabase) throw new Error('Supabase not initialized');
+        const { error } = await window.supabase
+            .from('clients')
+            .delete()
+            .eq('id', id);
         if (error) throw error;
         return true;
     }

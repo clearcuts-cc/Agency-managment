@@ -69,6 +69,14 @@
                 </svg>
                 Analytics
             </a>
+            <a href="#" class="nav-item" data-page="notifications">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                Notifications
+                <span class="nav-badge" id="notifications-nav-badge" style="display:none;">0</span>
+            </a>
 
             <!-- Employee Only Section -->
             <a href="#" class="nav-item hidden-for-admin" id="my-dashboard-nav" data-page="employee-dashboard"
@@ -117,15 +125,6 @@
                     <div class="user-name" id="sidebar-user-name" style="font-size:0.9rem;">John Doe</div>
                     <div style="font-size:0.7rem; color:var(--text-secondary);" id="sidebar-user-role">Admin</div>
                 </div>
-                <!-- Notificaton Bell -->
-                <button class="icon-btn" id="notification-bell" style="width:32px; height:32px;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                    </svg>
-                    <span class="nav-badge" id="notification-count"
-                        style="display:none; position:absolute; top:-2px; right:-2px;">0</span>
-                </button>
                 <button class="logout-btn" id="sidebar-logout-btn" title="Log Out"
                     style="margin-left:auto; background:transparent; border:none; color:var(--text-secondary); cursor:pointer;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -153,37 +152,80 @@
     <main class="main-content main-wrapper">
         <!-- Calendar Page -->
         <section id="calendar-page" class="page active">
-            <div class="calendar-header-bar">
-                <h2 class="calendar-title" id="calendar-month-year">February 2026</h2>
-                <div class="calendar-nav">
-                    <button class="today-btn" id="today-btn">Today</button>
-                    <div class="nav-arrows">
-                        <button class="icon-btn" id="prev-month">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="15 18 9 12 15 6"></polyline>
-                            </svg>
-                        </button>
-                        <button class="icon-btn" id="next-month">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                        </button>
+            <div id="main-calendar-view">
+                <div class="calendar-header-bar">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <select class="calendar-month-select" id="calendar-month-select"
+                            style="padding: 0.5rem 1rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 1rem; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif;">
+                            <option value="0">January</option>
+                            <option value="1">February</option>
+                            <option value="2">March</option>
+                            <option value="3">April</option>
+                            <option value="4">May</option>
+                            <option value="5">June</option>
+                            <option value="6">July</option>
+                            <option value="7">August</option>
+                            <option value="8">September</option>
+                            <option value="9">October</option>
+                            <option value="10">November</option>
+                            <option value="11">December</option>
+                        </select>
+                        <select class="calendar-year-select" id="calendar-year-select"
+                            style="padding: 0.5rem 1rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 1rem; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif;">
+                            <!-- Years will be populated by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="calendar-nav">
+                        <button class="today-btn" id="today-btn">Today</button>
+                        <div class="nav-arrows">
+                            <button class="icon-btn" id="prev-month">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
+                            <button class="icon-btn" id="next-month">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calendar-container">
+                    <div class="calendar-weekdays">
+                        <div class="weekday-label">Sun</div>
+                        <div class="weekday-label">Mon</div>
+                        <div class="weekday-label">Tue</div>
+                        <div class="weekday-label">Wed</div>
+                        <div class="weekday-label">Thu</div>
+                        <div class="weekday-label">Fri</div>
+                        <div class="weekday-label">Sat</div>
+                    </div>
+                    <div class="calendar-grid" id="calendar-grid">
+                        <!-- Calendar days will be populated by JavaScript -->
                     </div>
                 </div>
             </div>
 
-            <div class="calendar-container">
-                <div class="calendar-weekdays">
-                    <div class="weekday-label">Sun</div>
-                    <div class="weekday-label">Mon</div>
-                    <div class="weekday-label">Tue</div>
-                    <div class="weekday-label">Wed</div>
-                    <div class="weekday-label">Thu</div>
-                    <div class="weekday-label">Fri</div>
-                    <div class="weekday-label">Sat</div>
+            <div id="date-view" style="display: none;">
+                <div class="calendar-header-bar">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <button class="icon-btn" id="back-to-calendar-btn" title="Back to Calendar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="19" y1="12" x2="5" y2="12"></line>
+                                <polyline points="12 19 5 12 12 5"></polyline>
+                            </svg>
+                        </button>
+                        <h2 class="calendar-title" id="date-view-title">Date View</h2>
+                    </div>
+                    <button class="btn btn-primary" id="add-task-date-view-btn" style="padding: 0.5rem 1rem;">+ Add
+                        Task</button>
                 </div>
-                <div class="calendar-grid" id="calendar-grid">
-                    <!-- Calendar days will be populated by JavaScript -->
+                <div class="calendar-container" style="min-height: 400px;" id="date-view-content">
+                    <div id="date-view-tasks-container" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <!-- Tasks will be populated here -->
+                    </div>
                 </div>
             </div>
         </section>
@@ -357,6 +399,38 @@
             </div>
         </section>
 
+        <!-- Notifications Page -->
+        <section id="notifications-page" class="page">
+            <div class="notifications-header" style="margin-bottom: var(--spacing-2xl);">
+                <div>
+                    <h2 class="analytics-title" style="font-size: 1.75rem; margin-bottom: 0.5rem;">Notifications</h2>
+                    <p class="analytics-subtitle">Stay updated on your tasks and assignments</p>
+                </div>
+                <div class="notification-filters"
+                    style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-lg);">
+                    <button class="filter-chip active" data-notif-filter="all">All</button>
+                    <button class="filter-chip" data-notif-filter="unread">Unread</button>
+                    <button class="filter-chip" data-notif-filter="read">Read</button>
+                </div>
+            </div>
+
+            <!-- Notification List -->
+            <div id="notifications-list" class="notifications-list">
+                <!-- Empty State -->
+                <div id="notifications-empty-state" class="empty-state" style="text-align: center; padding: 3rem 1rem;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="width: 64px; height: 64px; margin: 0 auto var(--spacing-lg); color: var(--text-muted);">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <h3 style="font-size: 1.125rem; margin-bottom: var(--spacing-sm); color: var(--text-secondary);">No
+                        notifications</h3>
+                    <p style="color: var(--text-muted); font-size: 0.875rem;">You're all caught up!</p>
+                </div>
+                <!-- Notifications will be populated here -->
+            </div>
+        </section>
+
         <!-- Team & Clients Page -->
         <section id="client-approvals-page" class="page">
             <div class="analytics-header">
@@ -415,40 +489,12 @@
         <!-- Settings Page -->
         <section id="settings-page" class="page">
             <div class="analytics-header">
-                <h2 class="analytics-title">Settings & Profile</h2>
-                <p class="analytics-subtitle">Manage your account and preferences</p>
+                <h2 class="analytics-title">Settings</h2>
+                <p class="analytics-subtitle">Manage your preferences</p>
             </div>
 
             <div class="settings-grid"
                 style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
-                <!-- Profile Section -->
-                <div class="stat-card">
-                    <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem;">Profile</h3>
-                    <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem;">
-                        <div class="user-avatar" id="settings-avatar-display"
-                            style="width: 80px; height: 80px; font-size: 2rem;">JD</div>
-                        <div>
-                            <h4 id="settings-header-name" style="margin-bottom: 0.5rem; color: var(--text-primary);">
-                                John Doe</h4>
-                            <span class="task-badge priority-badge priority-medium"
-                                id="settings-role-badge">Admin</span>
-                        </div>
-                    </div>
-                    <form id="profile-form">
-                        <div class="form-group">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" class="form-input" id="settings-name" value="John Doe" readonly
-                                style="opacity: 0.7; cursor: not-allowed;">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Email Address</label>
-                            <input type="email" class="form-input" id="settings-email" value="john@example.com" readonly
-                                style="opacity: 0.7; cursor: not-allowed;">
-                        </div>
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">Save Changes</button>
-                    </form>
-                </div>
-
                 <!-- App Preferences -->
                 <div class="stat-card">
                     <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem;">Notifications</h3>
@@ -500,6 +546,45 @@
                             🔔 Test Notification
                         </button>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Profile Page -->
+        <section id="profile-page" class="page">
+            <div class="analytics-header">
+                <h2 class="analytics-title">My Profile</h2>
+                <p class="analytics-subtitle">Manage your account information</p>
+            </div>
+
+            <div class="settings-grid"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+                <!-- Profile Section -->
+                <div class="stat-card">
+                    <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem;">Profile Details</h3>
+                    <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 2rem;">
+                        <div class="user-avatar" id="settings-avatar-display"
+                            style="width: 80px; height: 80px; font-size: 2rem;">JD</div>
+                        <div>
+                            <h4 id="settings-header-name" style="margin-bottom: 0.5rem; color: var(--text-primary);">
+                                John Doe</h4>
+                            <span class="task-badge priority-badge priority-medium"
+                                id="settings-role-badge">Admin</span>
+                        </div>
+                    </div>
+                    <form id="profile-form">
+                        <div class="form-group">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-input" id="settings-name" value="John Doe" readonly
+                                style="opacity: 0.7; cursor: not-allowed;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" class="form-input" id="settings-email" value="john@example.com" readonly
+                                style="opacity: 0.7; cursor: not-allowed;">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Save Changes</button>
+                    </form>
                 </div>
             </div>
         </section>
