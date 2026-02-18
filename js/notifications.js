@@ -2,6 +2,7 @@
 
 const NotificationService = {
     currentFilter: 'all',
+    _dismissedSmartKey: 'clearcut_dismissed_smart_notifications',
 
     async getNotifications() {
         if (!Storage.isSupabaseActive()) return [];
@@ -110,37 +111,70 @@ const NotificationService = {
     },
 
     async updateBadgeCount() {
-        const notifications = await this.getNotifications();
-        const unreadCount = notifications.filter(n => !n.is_read).length;
+        try {
+            const notifications = await this.getNotifications();
+            const unreadDbCount = notifications.filter(n => !n.is_read).length;
 
-        // Update sidebar navigation badge
-        const navBadge = document.getElementById('notifications-nav-badge');
-        if (navBadge) {
-            navBadge.textContent = unreadCount;
-            navBadge.style.display = unreadCount > 0 ? 'inline-block' : 'none';
-        }
+            // Include smart notifications in the count
+            // These are always "unread" until dismissed or resolved
+            const smartNotifications = await this.generateSmartNotifications();
+            const smartCount = smartNotifications.length;
 
-        // Update footer notification count
-        const footerBadge = document.getElementById('notification-count');
-        if (footerBadge) {
-            footerBadge.textContent = unreadCount;
-            footerBadge.style.display = unreadCount > 0 ? 'inline-block' : 'none';
+            const totalUnread = unreadDbCount + smartCount;
+
+            // Update sidebar navigation badge
+            const navBadge = document.getElementById('notifications-nav-badge');
+            if (navBadge) {
+                navBadge.textContent = totalUnread;
+                navBadge.style.display = totalUnread > 0 ? 'inline-block' : 'none';
+            }
+
+            // Update footer notification count
+            const footerBadge = document.getElementById('notification-count');
+            if (footerBadge) {
+                footerBadge.textContent = totalUnread;
+                footerBadge.style.display = totalUnread > 0 ? 'inline-block' : 'none';
+            }
+        } catch (error) {
+            console.error('Error updating badge count:', error);
         }
     },
 
     async renderNotificationsPage() {
-        const notifications = await this.getNotifications();
+        const dbNotifications = await this.getNotifications();
+        const smartNotifications = await this.generateSmartNotifications();
         const listContainer = document.getElementById('notifications-list');
         const emptyState = document.getElementById('notifications-empty-state');
 
         if (!listContainer) return;
 
-        // Filter notifications based on current filter
-        let filteredNotifications = notifications;
-        if (this.currentFilter === 'unread') {
-            filteredNotifications = notifications.filter(n => !n.is_read);
+        // Combine all notifications
+        let allNotifications = [];
+
+        // Add smart notifications (at the top)
+        smartNotifications.forEach(sn => {
+            allNotifications.push({
+                ...sn,
+                _isSmart: true
+            });
+        });
+
+        // Add DB notifications
+        dbNotifications.forEach(n => {
+            allNotifications.push({
+                ...n,
+                _isSmart: false
+            });
+        });
+
+        // Filter based on current filter
+        let filtered = allNotifications;
+        if (this.currentFilter === 'smart') {
+            filtered = allNotifications.filter(n => n._isSmart);
+        } else if (this.currentFilter === 'unread') {
+            filtered = allNotifications.filter(n => n._isSmart || !n.is_read);
         } else if (this.currentFilter === 'read') {
-            filteredNotifications = notifications.filter(n => n.is_read);
+            filtered = allNotifications.filter(n => !n._isSmart && n.is_read);
         }
 
         // Clear existing notifications (keep empty state)
@@ -148,17 +182,223 @@ const NotificationService = {
         existingCards.forEach(card => card.remove());
 
         // Show/hide empty state
-        if (filteredNotifications.length === 0) {
+        if (filtered.length === 0) {
             if (emptyState) emptyState.style.display = 'block';
         } else {
             if (emptyState) emptyState.style.display = 'none';
 
-            // Render each notification
-            filteredNotifications.forEach(notification => {
-                const card = this.createNotificationCard(notification);
-                listContainer.appendChild(card);
+            filtered.forEach(notification => {
+                if (notification._isSmart) {
+                    const card = this.createSmartNotificationCard(notification);
+                    listContainer.appendChild(card);
+                } else {
+                    const card = this.createNotificationCard(notification);
+                    listContainer.appendChild(card);
+                }
             });
         }
+    },
+
+    // ===== Smart Notification System =====
+    async generateSmartNotifications() {
+        const currentUser = Auth.getCurrentUser();
+        if (!currentUser) return [];
+
+        const isAdmin = currentUser.role && currentUser.role.toLowerCase() === 'admin';
+        let tasks = await Storage.getTasks();
+
+        // Employees see only their tasks
+        if (!isAdmin) {
+            tasks = tasks.filter(t => (t.assignee_id || t.assigneeId) === currentUser.id);
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const todayStr = today.toISOString().split('T')[0];
+
+        const dismissed = this._getDismissedSmartIds();
+        const notifications = [];
+
+        tasks.forEach(task => {
+            if (task.status === 'Done') return;
+
+            const deadline = task.deadline ? new Date(task.deadline) : null;
+            if (!deadline) return;
+            deadline.setHours(0, 0, 0, 0);
+
+            const deadlineStr = deadline.toISOString().split('T')[0];
+
+            // Overdue tasks
+            if (deadline < today) {
+                const smartId = `overdue_${task.id}_${todayStr}`;
+                if (!dismissed.includes(smartId)) {
+                    const daysOverdue = Math.ceil((today - deadline) / 86400000);
+                    notifications.push({
+                        id: smartId,
+                        message: `⚠️ "${task.title}" is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue (deadline: ${deadlineStr})`,
+                        type: 'overdue',
+                        severity: 'danger',
+                        taskId: task.id,
+                        created_at: new Date().toISOString()
+                    });
+                }
+            }
+
+            // Due today
+            if (deadlineStr === todayStr) {
+                const smartId = `due_today_${task.id}_${todayStr}`;
+                if (!dismissed.includes(smartId)) {
+                    notifications.push({
+                        id: smartId,
+                        message: `📅 "${task.title}" is due today! Status: ${task.status}`,
+                        type: 'due_today',
+                        severity: 'warning',
+                        taskId: task.id,
+                        created_at: new Date().toISOString()
+                    });
+                }
+            }
+
+            // Pending from yesterday (still not done)
+            if (task.status === 'Pending') {
+                const smartId = `pending_reminder_${task.id}_${todayStr}`;
+                if (!dismissed.includes(smartId)) {
+                    notifications.push({
+                        id: smartId,
+                        message: `🔔 "${task.title}" is still pending. Consider starting this task.`,
+                        type: 'pending_reminder',
+                        severity: 'info',
+                        taskId: task.id,
+                        created_at: new Date().toISOString()
+                    });
+                }
+            }
+        });
+
+        return notifications;
+    },
+
+    _getDismissedSmartIds() {
+        try {
+            return JSON.parse(localStorage.getItem(this._dismissedSmartKey) || '[]');
+        } catch {
+            return [];
+        }
+    },
+
+    _dismissSmartNotification(smartId) {
+        const dismissed = this._getDismissedSmartIds();
+        if (!dismissed.includes(smartId)) {
+            dismissed.push(smartId);
+            localStorage.setItem(this._dismissedSmartKey, JSON.stringify(dismissed));
+        }
+    },
+
+    _clearAllDismissed() {
+        localStorage.removeItem(this._dismissedSmartKey);
+    },
+
+    createSmartNotificationCard(notification) {
+        const card = document.createElement('div');
+        card.className = 'notification-card smart-notification';
+
+        const severityColors = {
+            danger: { bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.3)', icon: '#EF4444' },
+            warning: { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.3)', icon: '#F59E0B' },
+            info: { bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.3)', icon: '#3B82F6' }
+        };
+        const colors = severityColors[notification.severity] || severityColors.info;
+
+        card.style.cssText = `
+            background: ${colors.bg};
+            border: 1px solid ${colors.border};
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            gap: var(--spacing-md);
+            align-items: flex-start;
+            transition: var(--transition);
+        `;
+
+        // Smart badge
+        const badge = document.createElement('div');
+        badge.innerHTML = '⚡';
+        badge.style.cssText = `font-size: 1.25rem; flex-shrink: 0; line-height: 1.5;`;
+
+        const content = document.createElement('div');
+        content.style.cssText = 'flex: 1;';
+
+        const msg = document.createElement('p');
+        msg.textContent = notification.message;
+        msg.style.cssText = `color: var(--text-primary); font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem;`;
+
+        const label = document.createElement('span');
+        label.textContent = 'Smart Alert';
+        label.style.cssText = `font-size: 0.6875rem; color: ${colors.icon}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;`;
+
+        content.appendChild(msg);
+        content.appendChild(label);
+
+        // Dismiss button
+        const dismissBtn = document.createElement('button');
+        dismissBtn.textContent = '✕';
+        dismissBtn.title = 'Dismiss';
+        dismissBtn.style.cssText = `
+            background: transparent; border: none; color: var(--text-muted); font-size: 1rem;
+            cursor: pointer; padding: 0.25rem; line-height: 1; border-radius: 4px;
+            transition: all 0.2s;
+        `;
+        dismissBtn.addEventListener('click', () => {
+            this._dismissSmartNotification(notification.id);
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(20px)';
+            setTimeout(() => {
+                card.remove();
+                // Check if empty
+                const listContainer = document.getElementById('notifications-list');
+                const emptyState = document.getElementById('notifications-empty-state');
+                if (listContainer && listContainer.querySelectorAll('.notification-card').length === 0 && emptyState) {
+                    emptyState.style.display = 'block';
+                }
+            }, 300);
+        });
+        dismissBtn.addEventListener('mouseenter', function () { this.style.color = '#EF4444'; });
+        dismissBtn.addEventListener('mouseleave', function () { this.style.color = 'var(--text-muted)'; });
+
+        card.appendChild(badge);
+        card.appendChild(content);
+        card.appendChild(dismissBtn);
+
+        return card;
+    },
+
+    async clearAllNotifications() {
+        // Dismiss all smart notifications
+        const smartNotifications = await this.generateSmartNotifications();
+        smartNotifications.forEach(sn => {
+            this._dismissSmartNotification(sn.id);
+        });
+
+        // Delete all DB notifications
+        if (Storage.isSupabaseActive()) {
+            try {
+                const currentUser = Auth.getCurrentUser();
+                if (currentUser) {
+                    await window.supabase
+                        .from('notifications')
+                        .delete()
+                        .eq('user_id', currentUser.id);
+                }
+            } catch (e) {
+                console.error('Error clearing DB notifications:', e);
+            }
+        }
+
+        await this.updateBadgeCount();
+        await this.renderNotificationsPage();
     },
 
     createNotificationCard(notification) {
@@ -368,16 +608,32 @@ const NotificationService = {
         // Set up filter buttons
         const filterBtns = document.querySelectorAll('[data-notif-filter]');
         filterBtns.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                // Update active state
-                filterBtns.forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
+            // Remove old listeners by cloning
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+        });
 
-                // Update filter and re-render
+        // Re-query after clone
+        document.querySelectorAll('[data-notif-filter]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                document.querySelectorAll('[data-notif-filter]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
                 this.currentFilter = e.target.dataset.notifFilter;
                 await this.renderNotificationsPage();
             });
         });
+
+        // Clear All button
+        const clearAllBtn = document.getElementById('clear-all-notifications-btn');
+        if (clearAllBtn) {
+            const newClearBtn = clearAllBtn.cloneNode(true);
+            clearAllBtn.parentNode.replaceChild(newClearBtn, clearAllBtn);
+            newClearBtn.addEventListener('click', async () => {
+                if (confirm('Clear all notifications? This will dismiss all smart alerts and delete all stored notifications.')) {
+                    await this.clearAllNotifications();
+                }
+            });
+        }
 
         // Initial render
         this.renderNotificationsPage();

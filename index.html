@@ -54,12 +54,12 @@
                 </svg>
                 Calendar
             </a>
-            <a href="#" class="nav-item" data-page="tasks">
+            <a href="#" class="nav-item" data-page="projects">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 11l3 3L22 4"></path>
                     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
                 </svg>
-                Tasks
+                Projects
             </a>
             <a href="#" class="nav-item" data-page="analytics">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -95,6 +95,7 @@
                 style="display:none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
                 <p style="font-size: 0.75rem; color: var(--text-muted); padding-left: 1rem; margin-bottom: 0.5rem;">
                     ADMIN</p>
+                <!-- Moved Projects to Main Menu -->
                 <a href="#" class="nav-item" data-page="client-approvals">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -177,6 +178,8 @@
                     </div>
                     <div class="calendar-nav">
                         <button class="today-btn" id="today-btn">Today</button>
+                        <input type="date" id="calendar-date-filter" title="Jump to date"
+                            style="padding: 0.4rem 0.6rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem; font-family: 'Inter', sans-serif; cursor: pointer; color-scheme: dark;">
                         <div class="nav-arrows">
                             <button class="icon-btn" id="prev-month">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -208,7 +211,7 @@
                 </div>
             </div>
 
-            <div id="date-view" style="display: none;">
+            <div id="date-view" style="display: none;" tabindex="0" style="outline: none;">
                 <div class="calendar-header-bar">
                     <div style="display: flex; align-items: center; gap: 1rem;">
                         <button class="icon-btn" id="back-to-calendar-btn" title="Back to Calendar">
@@ -217,10 +220,26 @@
                                 <polyline points="12 19 5 12 12 5"></polyline>
                             </svg>
                         </button>
-                        <h2 class="calendar-title" id="date-view-title">Date View</h2>
+
+                        <!-- Date Navigation Controls -->
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button class="icon-btn" id="prev-day-btn" title="Previous day (←)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
+                            <h3 id="date-view-title"
+                                style="margin: 0; font-size: 1.25rem; min-width: 220px; text-align: center;">February
+                                14, 2026</h3>
+                            <button class="icon-btn" id="next-day-btn" title="Next day (→)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <button class="btn btn-primary" id="add-task-date-view-btn" style="padding: 0.5rem 1rem;">+ Add
-                        Task</button>
+                        Project</button>
                 </div>
                 <div class="calendar-container" style="min-height: 400px;" id="date-view-content">
                     <div id="date-view-tasks-container" style="display: flex; flex-direction: column; gap: 1rem;">
@@ -230,20 +249,118 @@
             </div>
         </section>
 
-        <!-- Tasks Page -->
-        <section id="tasks-page" class="page">
-            <div class="analytics-header">
-                <h2 class="analytics-title">Task Management</h2>
-                <p class="analytics-subtitle">Track and manage all your tasks</p>
-                <div class="analytics-filters">
-                    <button class="filter-chip active" data-filter="all">All Tasks</button>
-                    <button class="filter-chip" data-filter="pending">Pending</button>
-                    <button class="filter-chip" data-filter="in-progress">In Progress</button>
-                    <button class="filter-chip" data-filter="done">Done</button>
+        <!-- Projects Page -->
+        <section id="projects-page" class="page">
+            <div id="projects-main-view">
+                <div class="analytics-header">
+                    <h2 class="analytics-title">Client Projects</h2>
+                    <p class="analytics-subtitle">Manage projects by client workspace</p>
+                </div>
+                <!-- Project Stats Summary -->
+                <div class="stat-cards"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    <!-- Total -->
+                    <div class="glass-panel"
+                        style="padding: 1.5rem; border-radius: 12px; background: rgba(17, 17, 17, 0.6);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                            <span style="font-size: 0.875rem; font-weight: 600; color: #fff;">Total Tasks</span>
+                            <svg style="color: #6B7280; width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                        </div>
+                        <div class="stat-value" id="project-total-stat"
+                            style="font-size: 2.25rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">0</div>
+                        <div class="stat-change" style="font-size: 0.75rem; color: #6B7280;">Across all clients</div>
+                    </div>
+
+                    <!-- Completed -->
+                    <div class="glass-panel"
+                        style="padding: 1.5rem; border-radius: 12px; background: rgba(17, 17, 17, 0.6);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                            <span style="font-size: 0.875rem; font-weight: 600; color: #fff;">Completed</span>
+                            <svg style="color: #10B981; width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div class="stat-value" id="project-completed-stat"
+                            style="font-size: 2.25rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">0</div>
+                        <div class="stat-change" style="font-size: 0.75rem; color: #6B7280;">On track</div>
+                    </div>
+
+                    <!-- In Progress -->
+                    <div class="glass-panel"
+                        style="padding: 1.5rem; border-radius: 12px; background: rgba(17, 17, 17, 0.6);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                            <span style="font-size: 0.875rem; font-weight: 600; color: #fff;">In Progress</span>
+                            <svg style="color: #3B82F6; width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div class="stat-value" id="project-in-progress-stat"
+                            style="font-size: 2.25rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">0</div>
+                        <div class="stat-change" style="font-size: 0.75rem; color: #6B7280;">Active tasks</div>
+                    </div>
+
+                    <!-- Pending -->
+                    <div class="glass-panel"
+                        style="padding: 1.5rem; border-radius: 12px; background: rgba(17, 17, 17, 0.6);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                            <span style="font-size: 0.875rem; font-weight: 600; color: #fff;">Pending</span>
+                            <svg style="color: #F59E0B; width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                        </div>
+                        <div class="stat-value" id="project-pending-stat"
+                            style="font-size: 2.25rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">0</div>
+                        <div class="stat-change" style="font-size: 0.75rem; color: #6B7280;">Awaiting start</div>
+                    </div>
+                </div>
+
+                <!-- Projects Grid -->
+                <div id="projects-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+                    <!-- Client Cards injected here -->
                 </div>
             </div>
-            <div id="tasks-list">
-                <!-- Tasks will be populated by JavaScript -->
+
+            <!-- Project Detail View (Hidden default) -->
+            <div id="project-detail-view" style="display: none;">
+                <button class="btn btn-secondary" id="back-to-projects-btn"
+                    style="margin-bottom: 1rem; padding: 0.5rem 1rem;">
+                    ← Back to Projects
+                </button>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h2 class="analytics-title" id="project-detail-name">Client Name</h2>
+                    <p class="analytics-subtitle">Project Workspace</p>
+                </div>
+
+                <!-- Stats Row -->
+                <div id="project-stats-row"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                    <!-- Stats injected here -->
+                </div>
+
+                <!-- Task List Header -->
+                <div
+                    style="padding: 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600;">Client Projects</h3>
+                    <button class="btn btn-primary" id="add-project-task-btn">+ Add Project</button>
+                </div>
+
+                <!-- Task List -->
+                <div id="project-tasks-list"
+                    style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <!-- Tasks injected here -->
+                </div>
             </div>
         </section>
 
@@ -406,9 +523,13 @@
                     <h2 class="analytics-title" style="font-size: 1.75rem; margin-bottom: 0.5rem;">Notifications</h2>
                     <p class="analytics-subtitle">Stay updated on your tasks and assignments</p>
                 </div>
+                <button class="btn" id="clear-all-notifications-btn"
+                    style="background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.2); padding: 0.4rem 0.75rem; border-radius: 8px; font-size: 0.75rem; cursor: pointer;">Clear
+                    All</button>
                 <div class="notification-filters"
-                    style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-lg);">
+                    style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-lg); flex-wrap: wrap;">
                     <button class="filter-chip active" data-notif-filter="all">All</button>
+                    <button class="filter-chip" data-notif-filter="smart">⚡ Smart Alerts</button>
                     <button class="filter-chip" data-notif-filter="unread">Unread</button>
                     <button class="filter-chip" data-notif-filter="read">Read</button>
                 </div>
@@ -586,6 +707,56 @@
                         <button type="submit" class="btn btn-primary" style="width: 100%;">Save Changes</button>
                     </form>
                 </div>
+
+                <!-- Advanced Settings Card -->
+                <div class="stat-card">
+                    <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem;">⚙️ General Settings</h3>
+
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label class="form-label">Default Landing Page</label>
+                        <select class="form-select" id="setting-default-page">
+                            <option value="calendar">Calendar</option>
+                            <option value="tasks">Tasks</option>
+                            <option value="analytics">Analytics</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label class="form-label">Default Task Filter</label>
+                        <select class="form-select" id="setting-default-filter">
+                            <option value="all">All Tasks</option>
+                            <option value="pending">Pending</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="done">Done</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label class="form-label"
+                            style="display: flex; justify-content: space-between; align-items: center;">
+                            Auto-refresh data
+                            <label class="toggle-switch"
+                                style="position: relative; display: inline-block; width: 40px; height: 22px;">
+                                <input type="checkbox" id="setting-auto-refresh" checked
+                                    style="opacity: 0; width: 0; height: 0;">
+                                <span
+                                    style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.1); border-radius: 22px; transition: 0.3s;"></span>
+                            </label>
+                        </label>
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Automatically
+                            refresh task data every 30 seconds</p>
+                    </div>
+
+                    <button type="button" class="btn btn-primary" id="save-advanced-settings-btn"
+                        style="width: 100%;">Save Settings</button>
+
+                    <div
+                        style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                        <p style="font-size: 0.75rem; color: var(--text-muted);">ContentFlow v1.0.0</p>
+                        <p style="font-size: 0.6875rem; color: var(--text-muted); margin-top: 0.25rem;">© 2026 ClearCut
+                            Creative Agency</p>
+                    </div>
+                </div>
             </div>
         </section>
     </main>
@@ -594,7 +765,7 @@
     <div class="modal" id="task-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">Create New Task</h3>
+                <h3 class="modal-title">Create New Project</h3>
                 <button class="modal-close" id="close-task-modal">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -603,12 +774,14 @@
                 </button>
             </div>
             <div class="modal-body">
-                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.5rem;">Add a new task to
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.5rem;">Add a new project
+                    to
                     your calendar</p>
                 <form id="task-form">
                     <div class="form-group">
-                        <label class="form-label" for="task-title">Task Title</label>
-                        <input type="text" class="form-input" id="task-title" required placeholder="Enter task title">
+                        <label class="form-label" for="task-title">Project Title</label>
+                        <input type="text" class="form-input" id="task-title" required
+                            placeholder="Enter project title">
                     </div>
 
                     <!-- Assignee (Admin Only) -->
@@ -629,7 +802,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="task-type">Task Type</label>
+                        <label class="form-label" for="task-type">Project Type</label>
                         <select class="form-select" id="task-type" required>
                             <option value="Post">Post</option>
                             <option value="Script">Script</option>
@@ -657,7 +830,7 @@
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" id="cancel-task">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create Task</button>
+                        <button type="submit" class="btn btn-primary">Create Project</button>
                     </div>
                 </form>
             </div>
@@ -668,7 +841,7 @@
     <div class="modal" id="edit-task-modal">
         <div class="modal-content glass-modal">
             <div class="modal-header">
-                <h3 class="modal-title">Edit Task</h3>
+                <h3 class="modal-title">Edit Project</h3>
                 <button class="modal-close" id="close-edit-task-modal">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -682,12 +855,29 @@
                 <form id="edit-task-form">
                     <input type="hidden" id="edit-task-id">
                     <div class="form-group">
-                        <label class="form-label" for="edit-task-title">Task Title</label>
-                        <input type="text" class="form-input" id="edit-task-title" required
-                            placeholder="Enter task title">
+                        <label class="form-label" for="edit-task-title">Project Title</label>
+                        <input type="text" class="form-input" id="edit-task-title" required>
                     </div>
+                    <!-- Email field removed from Project modal -->
+                    <!-- Assignee (Admin Only) -->
+                    <div class="form-group" id="edit-task-assignee-group" style="display: none;">
+                        <label class="form-label" for="edit-task-assignee">Assign To</label>
+                        <select class="form-select" id="edit-task-assignee">
+                            <option value="">Select Employee</option>
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
+                    <!-- Client Selection -->
+                    <div class="form-group" id="edit-task-client-group" style="display: none;">
+                        <label class="form-label" for="edit-task-client">Client</label>
+                        <select class="form-select" id="edit-task-client">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
                     <div class="form-group">
-                        <label class="form-label" for="edit-task-type">Task Type</label>
+                        <label class="form-label" for="edit-task-type">Project Type</label>
                         <select class="form-select" id="edit-task-type" required>
                             <option value="Post">Post</option>
                             <option value="Script">Script</option>
@@ -713,13 +903,16 @@
                         <label class="form-label" for="edit-task-due-date">End Date (Optional)</label>
                         <input type="date" class="form-input" id="edit-task-due-date" placeholder="Select end date">
                     </div>
-                    <div class="form-group">
-                        <button type="button" class="btn btn-secondary" id="clear-due-date" style="width: 100%;">Clear
-                            due date</button>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" id="cancel-edit-task">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Task</button>
+
+                    <div class="form-actions"
+                        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <button type="button" class="btn" id="delete-task-btn"
+                            style="background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.2s;">🗑
+                            Delete Project</button>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="button" class="btn btn-secondary" id="cancel-edit-task">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Update Project</button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -868,6 +1061,7 @@
                         <label class="form-label" for="edit-client-name">Client Name</label>
                         <input type="text" class="form-input" id="edit-client-name" required>
                     </div>
+                    <!-- Email field restored -->
                     <div class="form-group">
                         <label class="form-label" for="edit-client-email">Email</label>
                         <input type="email" class="form-input" id="edit-client-email" required>

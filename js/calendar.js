@@ -10,6 +10,9 @@ const NewCalendar = {
     ],
 
     init() {
+        if (this.initialized) return;
+        this.initialized = true;
+
         this.populateYearDropdown();
         this.renderCalendar();
         this.attachEventListeners();
@@ -65,6 +68,17 @@ const NewCalendar = {
         if (yearSelect) {
             yearSelect.value = this.currentDate.getFullYear();
         }
+
+        // Sync date filter picker to current month
+        const datePicker = document.getElementById('calendar-date-filter');
+        if (datePicker && !datePicker.value) {
+            // Set to first of current month if not already set by user
+            const y = this.currentDate.getFullYear();
+            const m = String(this.currentDate.getMonth() + 1).padStart(2, '0');
+            const d = String(this.currentDate.getDate()).padStart(2, '0');
+            datePicker.value = `${y}-${m}-${d}`;
+        }
+
 
         // Clear existing calendar
         calendarGrid.innerHTML = '';
@@ -212,10 +226,11 @@ const NewCalendar = {
         return dayCell;
     },
 
-    openTaskModal(date) {
+    async openTaskModal(date, clientId = null) {
         const modal = document.getElementById('task-modal');
         const assignedDateInput = document.getElementById('task-assigned-date');
         const dueDateInput = document.getElementById('task-due-date');
+        const clientSelect = document.getElementById('task-client');
 
         // Set assigned date to selected date
         if (assignedDateInput && date) {
@@ -237,7 +252,15 @@ const NewCalendar = {
             modal.classList.add('active');
             // FIX: Call NewApp.populateTaskDropdowns to ensure employees are listed
             if (typeof NewApp !== 'undefined' && NewApp.populateTaskDropdowns) {
-                NewApp.populateTaskDropdowns().catch(console.error);
+                try {
+                    await NewApp.populateTaskDropdowns();
+                    // Pre-select Client if provided
+                    if (clientId && clientSelect) {
+                        clientSelect.value = clientId;
+                    }
+                } catch (error) {
+                    console.error('Error populating dropdowns:', error);
+                }
             }
         }
     },
@@ -251,21 +274,40 @@ const NewCalendar = {
         document.getElementById('edit-task-type').value = task.stage;
         document.getElementById('edit-task-status').value = task.status;
 
-        // Format dates for input fields
-        const deadlineDate = new Date(task.deadline);
-        const year = deadlineDate.getFullYear();
-        const month = String(deadlineDate.getMonth() + 1).padStart(2, '0');
-        const day = String(deadlineDate.getDate()).padStart(2, '0');
-        const formattedDate = `${year}-${month}-${day}`;
+        // Store previous values for change detection (used by handleEditTaskSubmit)
+        if (typeof NewApp !== 'undefined') {
+            NewApp._editingTaskPreviousStatus = task.status;
+            NewApp._editingTaskPreviousAssigneeId = task.assignee_id || task.assigneeId || '';
+        }
 
-        document.getElementById('edit-task-assigned-date').value = formattedDate;
-        document.getElementById('edit-task-due-date').value = formattedDate;
+        // Format dates for input fields
+        const assignedDate = task.assigned_date || task.assignedDate || task.deadline;
+        if (assignedDate) {
+            const aDate = new Date(assignedDate);
+            document.getElementById('edit-task-assigned-date').value = `${aDate.getFullYear()}-${String(aDate.getMonth() + 1).padStart(2, '0')}-${String(aDate.getDate()).padStart(2, '0')}`;
+        }
+
+        if (task.deadline) {
+            const dDate = new Date(task.deadline);
+            document.getElementById('edit-task-due-date').value = `${dDate.getFullYear()}-${String(dDate.getMonth() + 1).padStart(2, '0')}-${String(dDate.getDate()).padStart(2, '0')}`;
+        }
 
         if (modal) {
             modal.classList.add('active');
-            // FIX: Call NewApp.populateTaskDropdowns to ensure employees are listed
+            // Populate dropdowns and pre-select current values
             if (typeof NewApp !== 'undefined' && NewApp.populateTaskDropdowns) {
-                NewApp.populateTaskDropdowns().catch(console.error);
+                NewApp.populateTaskDropdowns().then(() => {
+                    // Pre-select current assignee
+                    const assigneeSelect = document.getElementById('edit-task-assignee');
+                    if (assigneeSelect && (task.assignee_id || task.assigneeId)) {
+                        assigneeSelect.value = task.assignee_id || task.assigneeId;
+                    }
+                    // Pre-select current client
+                    const clientSelect = document.getElementById('edit-task-client');
+                    if (clientSelect && (task.client_id || task.clientId)) {
+                        clientSelect.value = task.client_id || task.clientId;
+                    }
+                }).catch(console.error);
             }
         }
     },
@@ -285,14 +327,19 @@ const NewCalendar = {
         if (!mainView || !dateView || !dateTitle || !tasksContainer) return;
 
         // format date like "February 14, 2026"
-        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        const options = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' };
         dateTitle.textContent = date.toLocaleDateString('en-US', options);
+
+        // Focus the date view for keyboard navigation
+        if (dateView.getAttribute('tabindex')) {
+            setTimeout(() => dateView.focus(), 100);
+        }
 
         // Clear existing tasks
         tasksContainer.innerHTML = '';
 
         if (tasks.length === 0) {
-            tasksContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 3rem; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">No tasks scheduled for this day.</div>';
+            tasksContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 3rem; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">No projects scheduled for this day.</div>';
         } else {
             tasks.forEach(task => {
                 const taskCard = document.createElement('div');
@@ -392,7 +439,74 @@ const NewCalendar = {
 
     goToToday() {
         this.currentDate = new Date();
+        this.selectedDate = new Date();
         this.renderCalendar();
+    },
+
+    goToDate(dateStr) {
+        if (!dateStr) return;
+        const date = new Date(dateStr + 'T00:00:00');
+        if (isNaN(date.getTime())) return;
+
+        this.currentDate = new Date(date.getFullYear(), date.getMonth(), 1);
+        this.selectedDate = date;
+        this.renderCalendar();
+        this._openDateViewForSelectedDate();
+    },
+
+    previousDay() {
+        const d = new Date(this.selectedDate);
+        d.setDate(d.getDate() - 1);
+
+        // Check if we need to switch month view
+        if (d.getMonth() !== this.currentDate.getMonth() || d.getFullYear() !== this.currentDate.getFullYear()) {
+            this.currentDate = new Date(d.getFullYear(), d.getMonth(), 1);
+            this.renderCalendar();
+        }
+
+        this.selectedDate = d;
+        this._openDateViewForSelectedDate();
+    },
+
+    nextDay() {
+        const d = new Date(this.selectedDate);
+        d.setDate(d.getDate() + 1);
+
+        // Check if we need to switch month view
+        if (d.getMonth() !== this.currentDate.getMonth() || d.getFullYear() !== this.currentDate.getFullYear()) {
+            this.currentDate = new Date(d.getFullYear(), d.getMonth(), 1);
+            this.renderCalendar();
+        }
+
+        this.selectedDate = d;
+        this._openDateViewForSelectedDate();
+    },
+
+    // No longer needed for main header, but used by date view title update in renderDateView
+    updateDateDisplay() {
+        // Implementation moved to renderDateView directly
+    },
+
+    async _openDateViewForSelectedDate() {
+        const date = this.selectedDate;
+        // Optimization: if we already have tasks and they are fresh, usage is fine, but safer to get tasks
+        const allTasks = this.allTasks || await Storage.getTasks();
+        const tasksOnDay = allTasks.filter(t => {
+            // Fix: Use local date string comparison to avoid timezone shifts
+            const taskDate = new Date(t.deadline || t.created_at);
+            return taskDate.toDateString() === date.toDateString();
+        });
+        const currentUser = typeof Auth !== 'undefined' ? Auth.getCurrentUser() : null;
+        const isAdmin = currentUser && currentUser.role && currentUser.role.toLowerCase() === 'admin';
+        const visibleTasks = isAdmin ? tasksOnDay : tasksOnDay.filter(t => (t.assignee_id || t.assigneeId) === (currentUser && currentUser.id));
+
+        // Show the date view
+        const calendarView = document.getElementById('main-calendar-view');
+        const dateView = document.getElementById('date-view');
+        if (calendarView) calendarView.style.display = 'none';
+        if (dateView) dateView.style.display = 'block';
+
+        this.renderDateView(date, visibleTasks);
     },
 
     attachEventListeners() {
@@ -426,12 +540,55 @@ const NewCalendar = {
         if (yearSelect) {
             yearSelect.addEventListener('change', (e) => this.changeYear(e.target.value));
         }
+
+        // Day navigation arrows (now in Date View)
+        // Use onclick to prevent multiple listeners from accumulating
+        const prevDayBtn = document.getElementById('prev-day-btn');
+        const nextDayBtn = document.getElementById('next-day-btn');
+        if (prevDayBtn) {
+            prevDayBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.previousDay();
+            };
+        }
+        if (nextDayBtn) {
+            nextDayBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.nextDay();
+            };
+        }
+
+        // Date filter picker (restored for main header)
+        const dateFilter = document.getElementById('calendar-date-filter');
+        if (dateFilter) {
+            dateFilter.addEventListener('change', (e) => this.goToDate(e.target.value));
+        }
+        // Keydown listener for date-view navigation
+        const dateView = document.getElementById('date-view');
+        if (dateView) {
+            dateView.addEventListener('keydown', (e) => {
+                const activeEl = document.activeElement;
+                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) return;
+
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    this.previousDay();
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    this.nextDay();
+                }
+            });
+        }
+
     },
 
     refresh() {
         this.renderCalendar();
     }
 };
+
+// Expose NewCalendar globally
+window.NewCalendar = NewCalendar;
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {

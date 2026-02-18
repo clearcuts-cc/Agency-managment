@@ -32,8 +32,13 @@ const NewApp = {
         this.attachAnalyticsListeners();
         this.attachSettingsListeners();
 
-        // Default to Calendar
-        this.handleNavigation('calendar');
+        // Default to user's preferred page from settings
+        try {
+            const settings = JSON.parse(localStorage.getItem('clearcut_advanced_settings') || '{}');
+            this.handleNavigation(settings.defaultPage || 'calendar');
+        } catch {
+            this.handleNavigation('calendar');
+        }
 
         console.log('Application Initialized');
     },
@@ -233,6 +238,46 @@ const NewApp = {
             if (document.getElementById('settings-avatar-display')) document.getElementById('settings-avatar-display').textContent = user.avatar;
             if (document.getElementById('settings-role-badge')) document.getElementById('settings-role-badge').textContent = user.role || 'Admin';
         }
+
+        // Load advanced settings from localStorage
+        this.loadAdvancedSettings();
+
+        // Save button listener
+        const saveBtn = document.getElementById('save-advanced-settings-btn');
+        if (saveBtn && !saveBtn._listenerAttached) {
+            saveBtn._listenerAttached = true;
+            saveBtn.addEventListener('click', () => this.saveAdvancedSettings());
+        }
+    },
+
+    loadAdvancedSettings() {
+        try {
+            const settings = JSON.parse(localStorage.getItem('clearcut_advanced_settings') || '{}');
+            const defaultPage = document.getElementById('setting-default-page');
+            const defaultFilter = document.getElementById('setting-default-filter');
+            const autoRefresh = document.getElementById('setting-auto-refresh');
+
+            if (defaultPage) defaultPage.value = settings.defaultPage || 'calendar';
+            if (defaultFilter) defaultFilter.value = settings.defaultFilter || 'all';
+            if (autoRefresh) autoRefresh.checked = settings.autoRefresh !== false; // default true
+        } catch (e) {
+            console.error('Error loading advanced settings:', e);
+        }
+    },
+
+    saveAdvancedSettings() {
+        const defaultPage = document.getElementById('setting-default-page');
+        const defaultFilter = document.getElementById('setting-default-filter');
+        const autoRefresh = document.getElementById('setting-auto-refresh');
+
+        const settings = {
+            defaultPage: defaultPage ? defaultPage.value : 'calendar',
+            defaultFilter: defaultFilter ? defaultFilter.value : 'all',
+            autoRefresh: autoRefresh ? autoRefresh.checked : true
+        };
+
+        localStorage.setItem('clearcut_advanced_settings', JSON.stringify(settings));
+        this.showNotification('Settings saved successfully!');
     },
 
     saveProfile() {
@@ -494,75 +539,81 @@ const NewApp = {
 
         console.log('Populating Dropdowns - User Role:', role, 'isAdmin:', isAdmin);
 
-        // 1. Assignee Dropdown
-        const assigneeGroup = document.getElementById('task-assignee-group');
-        const assigneeSelect = document.getElementById('task-assignee');
+        // Fetch employees and clients once for both create and edit modals
+        let employees = [];
+        let clients = [];
 
-        if (assigneeGroup && assigneeSelect) {
-            if (isAdmin) {
-                assigneeGroup.style.setProperty('display', 'block', 'important');
-                assigneeSelect.innerHTML = '<option value="">Select Employee</option>';
-
-                try {
-                    let employees = await Storage.getEmployees();
-                    console.log('Employees found:', employees.length);
-
-                    if (employees.length === 0) {
-                        const option = document.createElement('option');
-                        option.value = "";
-                        option.textContent = "No Employees Found";
-                        assigneeSelect.appendChild(option);
-                    } else {
-                        employees.forEach(emp => {
-                            const option = document.createElement('option');
-                            option.value = emp.id;
-                            option.textContent = emp.name;
-                            assigneeSelect.appendChild(option);
-                        });
-                    }
-
-
-                } catch (error) {
-                    console.error('Error fetching employees:', error);
-                    const option = document.createElement('option');
-                    option.textContent = "Error loading employees";
-                    assigneeSelect.appendChild(option);
-                }
-            } else {
-                assigneeGroup.style.display = 'none';
-            }
+        try {
+            employees = await Storage.getEmployees();
+            console.log('Employees found:', employees.length);
+        } catch (error) {
+            console.error('Error fetching employees:', error);
         }
 
-        // 2. Client Dropdown
-        const clientSelect = document.getElementById('task-client');
-        if (clientSelect) {
-            clientSelect.innerHTML = '<option value="">Select Client</option>';
-            try {
-                let clients = await Storage.getClients();
-                console.log('Clients found:', clients.length);
+        try {
+            clients = await Storage.getClients();
+            console.log('Clients found:', clients.length);
+        } catch (error) {
+            console.error('Error fetching clients:', error);
+        }
 
-                if (clients.length === 0) {
-                    const option = document.createElement('option');
-                    option.value = "";
-                    option.textContent = "No Clients Found";
-                    clientSelect.appendChild(option);
+        // Helper: populate an assignee select
+        const populateAssigneeSelect = (groupEl, selectEl) => {
+            if (!groupEl || !selectEl) return;
+            if (isAdmin) {
+                groupEl.style.setProperty('display', 'block', 'important');
+                selectEl.innerHTML = '<option value="">Select Employee</option>';
+                if (employees.length === 0) {
+                    selectEl.innerHTML += '<option value="">No Employees Found</option>';
                 } else {
-                    clients.forEach(client => {
+                    employees.forEach(emp => {
                         const option = document.createElement('option');
-                        option.value = client.id;
-                        option.textContent = client.name;
-                        clientSelect.appendChild(option);
+                        option.value = emp.id;
+                        option.textContent = emp.name;
+                        selectEl.appendChild(option);
                     });
                 }
-
-
-            } catch (error) {
-                console.error('Error fetching clients:', error);
-                const option = document.createElement('option');
-                option.textContent = "Error loading clients";
-                clientSelect.appendChild(option);
+            } else {
+                groupEl.style.display = 'none';
             }
-        }
+        };
+
+        // Helper: populate a client select
+        const populateClientSelect = (groupEl, selectEl) => {
+            if (!selectEl) return;
+            if (groupEl) groupEl.style.setProperty('display', isAdmin ? 'block' : 'none', 'important');
+            selectEl.innerHTML = '<option value="">Select Client</option>';
+            if (clients.length === 0) {
+                selectEl.innerHTML += '<option value="">No Clients Found</option>';
+            } else {
+                clients.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client.id;
+                    option.textContent = client.name;
+                    selectEl.appendChild(option);
+                });
+            }
+        };
+
+        // 1. Create Task Modal dropdowns
+        populateAssigneeSelect(
+            document.getElementById('task-assignee-group'),
+            document.getElementById('task-assignee')
+        );
+        populateClientSelect(
+            null,
+            document.getElementById('task-client')
+        );
+
+        // 2. Edit Task Modal dropdowns
+        populateAssigneeSelect(
+            document.getElementById('edit-task-assignee-group'),
+            document.getElementById('edit-task-assignee')
+        );
+        populateClientSelect(
+            document.getElementById('edit-task-client-group'),
+            document.getElementById('edit-task-client')
+        );
     },
 
     closeModalElement(modal) {
@@ -588,7 +639,10 @@ const NewApp = {
             page.classList.remove('active');
         });
 
-        const activePage = document.getElementById(`${pageId}-page`);
+        // Map 'tasks' and 'projects' to 'projects-page'
+        const targetId = (pageId === 'tasks' || pageId === 'projects') ? 'projects' : pageId;
+        const activePage = document.getElementById(`${targetId}-page`);
+
         if (activePage) {
             activePage.classList.add('active');
             this.currentPage = pageId;
@@ -596,8 +650,8 @@ const NewApp = {
             // Refresh content when switching pages
             if (pageId === 'analytics') {
                 this.renderAnalytics();
-            } else if (pageId === 'tasks') {
-                this.renderTasks();
+            } else if (pageId === 'tasks' || pageId === 'projects') {
+                this.renderProjectsPage();
             } else if (pageId === 'client-approvals') {
                 this.renderTeamPage();
             } else if (pageId === 'profile') {
@@ -635,6 +689,14 @@ const NewApp = {
             editTaskForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 this.handleEditTaskSubmit();
+            });
+        }
+
+        // Delete Task Button
+        const deleteTaskBtn = document.getElementById('delete-task-btn');
+        if (deleteTaskBtn) {
+            deleteTaskBtn.addEventListener('click', () => {
+                this.deleteCurrentTask();
             });
         }
 
@@ -744,7 +806,7 @@ const NewApp = {
         NewCalendar.refresh();
         await this.renderAnalytics();
         await this.renderTasks();
-        this.showNotification('Task created successfully!');
+        this.showNotification('Project created successfully!');
     },
 
     async handleEditTaskSubmit() {
@@ -755,18 +817,100 @@ const NewApp = {
         const assignedDate = document.getElementById('edit-task-assigned-date').value;
         const dueDate = document.getElementById('edit-task-due-date').value || assignedDate;
 
-        await Storage.updateTask(taskId, {
+        // Get the previous status to detect changes
+        const previousStatus = this._editingTaskPreviousStatus || '';
+        const previousAssigneeId = this._editingTaskPreviousAssigneeId || '';
+
+        // Build update payload
+        const updates = {
             title,
             stage: taskType,
             status,
-            deadline: dueDate
-        });
+            deadline: dueDate,
+            assigned_date: assignedDate
+        };
+
+        // Admin can change assignee and client
+        const currentUser = Auth.getCurrentUser();
+        const isAdmin = currentUser && currentUser.role && currentUser.role.toLowerCase() === 'admin';
+
+        if (isAdmin) {
+            const assigneeSelect = document.getElementById('edit-task-assignee');
+            const clientSelect = document.getElementById('edit-task-client');
+
+            if (assigneeSelect && assigneeSelect.value) {
+                updates.assignee_id = assigneeSelect.value;
+                const selectedOption = assigneeSelect.options[assigneeSelect.selectedIndex];
+                updates.assignee = selectedOption ? selectedOption.text : '';
+            }
+
+            if (clientSelect) {
+                updates.client_id = clientSelect.value || null;
+            }
+        }
+
+        await Storage.updateTask(taskId, updates);
+
+        // Create notification if status changed and task is assigned to someone else
+        const assigneeId = updates.assignee_id || previousAssigneeId;
+        if (status !== previousStatus && assigneeId && currentUser && assigneeId !== currentUser.id) {
+            try {
+                if (typeof NotificationService !== 'undefined') {
+                    await NotificationService.createNotification(
+                        assigneeId,
+                        `Project "${title}" status changed to ${status}`,
+                        'task_status_change',
+                        taskId
+                    );
+                }
+            } catch (e) {
+                console.error('Error creating status change notification:', e);
+            }
+        }
+
+        // Notify if assignee changed
+        if (updates.assignee_id && updates.assignee_id !== previousAssigneeId && currentUser && updates.assignee_id !== currentUser.id) {
+            try {
+                if (typeof NotificationService !== 'undefined') {
+                    await NotificationService.createNotification(
+                        updates.assignee_id,
+                        `Project "${title}" has been assigned to you`,
+                        'task_assigned',
+                        taskId
+                    );
+                }
+            } catch (e) {
+                console.error('Error creating reassignment notification:', e);
+            }
+        }
 
         this.closeModal('edit-task-modal');
         NewCalendar.refresh();
         await this.renderAnalytics();
         await this.renderTasks();
-        this.showNotification('Task updated successfully!');
+        this.showNotification('Project updated successfully!');
+    },
+
+    async deleteCurrentTask() {
+        const taskId = document.getElementById('edit-task-id').value;
+        if (!taskId) return;
+
+        const title = document.getElementById('edit-task-title').value || 'this task';
+        if (!confirm(`Are you sure you want to delete "${title}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await Storage.deleteTask(taskId);
+            this.closeModal('edit-task-modal');
+            NewCalendar.refresh();
+            await this.renderAnalytics();
+            await this.renderTasks();
+            this.showNotification('Project deleted successfully!');
+        } catch (error) {
+            console.error('Error deleting task:', error);
+            this.showNotification('Failed to delete task: ' + error.message);
+        }
     },
 
     // Restored Helper
@@ -926,7 +1070,7 @@ const NewApp = {
                 data: {
                     labels: Object.keys(statusCount),
                     datasets: [{
-                        label: 'Tasks',
+                        label: 'Projects',
                         data: Object.values(statusCount),
                         backgroundColor: '#3B82F6',
                         borderColor: '#3B82F6',
@@ -980,7 +1124,7 @@ const NewApp = {
                 data: {
                     labels: timelineLabels, // Use filtered labels
                     datasets: [{
-                        label: 'Tasks Created',
+                        label: 'Projects Created',
                         data: timelineData, // Use filtered data
                         borderColor: '#8B5CF6',
                         backgroundColor: gradient,
@@ -1134,39 +1278,231 @@ const NewApp = {
     },
 
     // ===== Tasks Rendering =====
-    async renderTasks(filter = 'all') {
-        const tasksList = document.getElementById('tasks-list');
-        if (!tasksList) return;
+    _currentTaskFilter: 'all',
+    _currentTaskSearch: '',
+    _currentTaskAssignee: '',
+    _currentTaskClient: '',
+    _taskFilterListenersAttached: false,
 
-        let tasks = await Storage.getTasks();
+    // Alias for compatibility to prevent init crash
+    renderTasks(filter) {
+        return this.renderProjectsPage();
+    },
 
-        // Apply filter
-        if (filter !== 'all') {
-            const statusMap = {
-                'pending': 'Pending',
-                'in-progress': 'In Progress',
-                'done': 'Done'
-            };
-            tasks = tasks.filter(t => t.status === statusMap[filter]);
+    async renderProjectsPage() {
+        const grid = document.getElementById('projects-grid');
+        if (!grid) return;
+
+        // Reset views
+        document.getElementById('projects-main-view').style.display = 'block';
+        document.getElementById('project-detail-view').style.display = 'none';
+
+        let clients = await Storage.getClients();
+        let allTasks = await Storage.getTasks();
+
+        // User scoping
+        const currentUser = Auth.getCurrentUser();
+        const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+
+        if (!isAdmin && currentUser) {
+            // Filter tasks to only those assigned to current user
+            allTasks = allTasks.filter(t => (t.assignee_id || t.assigneeId) === currentUser.id);
+
+            // Filter clients to only those having at least one task assigned to this user
+            clients = clients.filter(client =>
+                allTasks.some(t => (t.client_id || t.clientId) === client.id)
+            );
         }
 
-        if (tasks.length === 0) {
-            tasksList.innerHTML = `
-                <div style="text-align: center; padding: 4rem; color: var(--text-secondary);">
-                    <p>No tasks found</p>
-                </div>
-            `;
+        // Compute Aggregate Stats for Dashboard
+        const totalTasks = allTasks.length;
+        const completedTasks = allTasks.filter(t => t.status === 'Done').length;
+        const inProgressTasks = allTasks.filter(t => t.status === 'In Progress').length;
+        const pendingTasks = allTasks.filter(t => t.status === 'Pending').length;
+
+        const totalEl = document.getElementById('project-total-stat');
+        const completedEl = document.getElementById('project-completed-stat');
+        const inProgressEl = document.getElementById('project-in-progress-stat');
+        const pendingEl = document.getElementById('project-pending-stat');
+
+        if (totalEl) totalEl.textContent = totalTasks;
+        if (completedEl) completedEl.textContent = completedTasks;
+        if (inProgressEl) inProgressEl.textContent = inProgressTasks;
+        if (pendingEl) pendingEl.textContent = pendingTasks;
+
+        if (clients.length === 0) {
+            const msg = isAdmin
+                ? 'No clients found. Add clients in "Team & Clients" to see them here.'
+                : 'No projects assigned to you yet.';
+            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-secondary);">${msg}</div>`;
             return;
         }
 
-        tasksList.innerHTML = '';
+        grid.innerHTML = clients.map(client => {
+            // Compute stats
+            const clientTasks = allTasks.filter(t => (t.client_id || t.clientId) === client.id);
+            const total = clientTasks.length;
+            const pending = clientTasks.filter(t => t.status === 'Pending').length;
+            const inProgress = clientTasks.filter(t => t.status === 'In Progress').length;
+            const done = clientTasks.filter(t => t.status === 'Done').length;
 
-        // Use a loop to handle async client fetching if needed in future, 
-        // currently client fetching is sync but good to prepare.
-        for (const task of tasks) {
-            const client = await Storage.getClientById(task.clientId);
-            const taskCard = this.createTaskCard(task, client);
-            tasksList.appendChild(taskCard);
+            // Progress bar calculation
+            const progress = total === 0 ? 0 : Math.round((done / total) * 100);
+
+            // Escape strings for safety
+            const safeName = this.escapeHtml(client.name);
+            const safeId = this.escapeHtml(client.id);
+
+            return `
+            <div class="stat-card project-card" onclick="NewApp.openProjectDetail('${safeId}')" style="cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                    <div>
+                        <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">${safeName}</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary);">${clientTasks.length} Tasks</p>
+                    </div>
+                    <div style="background: rgba(59, 130, 246, 0.1); color: #60A5FA; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem; font-weight: 500;">
+                        ${progress}% Done
+                    </div>
+                </div>
+
+                <!-- Stats removed as per user request -->
+                <div style="margin-bottom: 1rem;"></div>
+
+                <div class="progress-bar" style="height: 6px;">
+                    <div class="progress-fill" style="width: ${progress}%;"></div>
+                </div>
+            </div>
+            `;
+        }).join('');
+    },
+
+    async openProjectDetail(clientId) {
+        const client = await Storage.getClientById(clientId);
+        if (!client) return;
+
+        // UI Switch
+        document.getElementById('projects-main-view').style.display = 'none';
+        const detailView = document.getElementById('project-detail-view');
+        detailView.style.display = 'block';
+
+        // Set Header
+        document.getElementById('project-detail-name').textContent = client.name;
+
+        // Back Button
+        document.getElementById('back-to-projects-btn').onclick = () => this.closeProjectDetail();
+
+        // Add Task Button with Pre-selection
+        const addTaskBtn = document.getElementById('add-project-task-btn');
+        if (addTaskBtn) {
+            addTaskBtn.onclick = () => {
+                if (typeof NewCalendar !== 'undefined') {
+                    NewCalendar.openTaskModal(null, clientId); // Pass clientId to pre-select
+                }
+            };
+        }
+
+        // Fetch Data
+        let allTasks = await Storage.getTasks();
+
+        // User scoping
+        const currentUser = Auth.getCurrentUser();
+        const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+
+        if (!isAdmin && currentUser) {
+            allTasks = allTasks.filter(t => (t.assignee_id || t.assigneeId) === currentUser.id);
+        }
+
+        const clientTasks = allTasks.filter(t => (t.client_id || t.clientId) === clientId);
+
+        // Render Analytics Cards for this Client
+        const statsRow = document.getElementById('project-stats-row');
+        if (statsRow) {
+            const pending = clientTasks.filter(t => t.status === 'Pending').length;
+            const inProgress = clientTasks.filter(t => t.status === 'In Progress').length;
+            const done = clientTasks.filter(t => t.status === 'Done').length;
+
+            const createCard = (label, count, colorClass) => `
+                <div class="stat-card" style="padding: 1rem;">
+                    <div class="stat-value" style="font-size: 1.5rem;">${count}</div>
+                    <div class="stat-label">${label}</div>
+                </div>
+            `;
+
+            statsRow.innerHTML = `
+                ${createCard('Total Tasks', clientTasks.length, '')}
+                ${createCard('Pending', pending, 'pending')}
+                ${createCard('In Progress', inProgress, 'in-progress')}
+                ${createCard('Completed', done, 'done')}
+            `;
+        }
+
+        // Render Task List
+        const listContainer = document.getElementById('project-tasks-list');
+        if (listContainer) {
+            if (clientTasks.length === 0) {
+                listContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tasks for this client.</div>';
+            } else {
+                listContainer.innerHTML = '';
+                clientTasks.forEach(task => {
+                    const card = this.createTaskCard(task, client); // Reuse existing card creator
+                    // Remove client badge/name since we are in client view? usage preference.
+                    // Actually existing card has client name, it's fine.
+                    listContainer.appendChild(card);
+                });
+            }
+        }
+    },
+
+    closeProjectDetail() {
+        document.getElementById('project-detail-view').style.display = 'none';
+        document.getElementById('projects-main-view').style.display = 'block';
+    },
+    _populateTaskFilterDropdowns(allTasks, isAdmin) {
+        // Assignee filter (admin only)
+        const assigneeFilter = document.getElementById('task-filter-assignee');
+        if (assigneeFilter) {
+            if (isAdmin) {
+                assigneeFilter.style.display = 'block';
+                const currentVal = assigneeFilter.value;
+                const uniqueAssignees = {};
+                allTasks.forEach(t => {
+                    const id = t.assignee_id || t.assigneeId;
+                    if (id && t.assignee) uniqueAssignees[id] = t.assignee;
+                });
+                assigneeFilter.innerHTML = '<option value="">All Assignees</option>';
+                Object.entries(uniqueAssignees).forEach(([id, name]) => {
+                    assigneeFilter.innerHTML += `<option value="${id}">${this.escapeHtml(name)}</option>`;
+                });
+                assigneeFilter.value = currentVal;
+            } else {
+                assigneeFilter.style.display = 'none';
+            }
+        }
+
+        // Client filter (admin only)
+        const clientFilter = document.getElementById('task-filter-client');
+        if (clientFilter) {
+            if (isAdmin) {
+                clientFilter.style.display = 'block';
+                const currentVal = clientFilter.value;
+                const uniqueClients = {};
+                allTasks.forEach(t => {
+                    const id = t.client_id || t.clientId;
+                    if (id) uniqueClients[id] = id; // We'll show ID, could lookup name
+                });
+                // We'll populate with names by fetching later
+                clientFilter.innerHTML = '<option value="">All Clients</option>';
+                Storage.getClients().then(clients => {
+                    clients.forEach(c => {
+                        if (uniqueClients[c.id]) {
+                            clientFilter.innerHTML += `<option value="${c.id}">${this.escapeHtml(c.name)}</option>`;
+                        }
+                    });
+                    clientFilter.value = currentVal;
+                }).catch(() => { });
+            } else {
+                clientFilter.style.display = 'none';
+            }
         }
     },
 
@@ -1477,6 +1813,9 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Expose NewApp globally
+window.NewApp = NewApp;
 
 // Initialize app when DOM is ready
 if (document.readyState === 'loading') {
