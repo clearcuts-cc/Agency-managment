@@ -928,10 +928,21 @@
                             <label class="form-label"
                                 style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem; display: block;">Assign
                                 Members</label>
-                            <div id="create-group-members-list"
-                                style="max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); padding: 0.5rem;"
-                                class="custom-scrollbar">
-                                <!-- Populated by JS -->
+                            <div class="custom-select-container" style="position: relative;">
+                                <div id="members-dropdown-trigger" onclick="NewApp.toggleMembersDropdown()"
+                                    style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); padding: 0.875rem 1rem; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s;">
+                                    <span id="members-dropdown-label" style="color: var(--text-muted);">Select
+                                        employees...</span>
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="opacity: 0.7;">
+                                        <path d="M6 9l6 6 6-6"></path>
+                                    </svg>
+                                </div>
+                                <div id="create-group-members-list"
+                                    style="display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 220px; overflow-y: auto; background: #1A1A1A; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; z-index: 100; margin-top: 6px; padding: 0.5rem; box-shadow: 0 10px 40px rgba(0,0,0,0.5);"
+                                    class="custom-scrollbar glass-panel">
+                                    <!-- Populated by JS -->
+                                </div>
                             </div>
                             <p
                                 style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.6rem; display: flex; align-items: center; gap: 0.4rem;">
@@ -1036,52 +1047,7 @@
         </div>
     </div>
 
-    <!-- Create Group Modal -->
-    <div class="modal" id="create-group-modal">
-        <div class="modal-content glass-modal">
-            <div class="modal-header">
-                <h3 class="modal-title">Create New Group</h3>
-                <button class="modal-close" id="close-create-group-modal">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-            <div class="modal-body">
-                <form id="group-form">
-                    <div class="form-group">
-                        <label class="form-label">Group Name</label>
-                        <input type="text" class="form-input" id="create-group-name" required
-                            placeholder="e.g. Creative Production">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Description</label>
-                        <textarea class="form-input" id="create-group-desc" rows="2"
-                            placeholder="Briefly describe the group's purpose"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Group Leader</label>
-                        <select class="form-select" id="create-group-leader" required>
-                            <option value="">Select an employee...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Group Members</label>
-                        <select class="form-select" id="create-group-members-select" multiple style="height: 120px;">
-                            <!-- Populated by JS -->
-                        </select>
-                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">Hold Ctrl (Cmd) to
-                            select multiple members</p>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" id="cancel-group">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create Group</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Edit Task Modal -->
     <div class="modal" id="edit-task-modal">

@@ -64,6 +64,19 @@ class Auth {
                     }
                 }
             });
+
+            // Realtime Listener for Account Deletion (Force Logout)
+            supabase
+                .channel('public:users')
+                .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'users' }, (payload) => {
+                    // Check if the deleted user is the current user
+                    if (this.currentUser && payload.old && payload.old.id === this.currentUser.id) {
+                        console.warn('Current user account was deleted. Forcing logout.');
+                        alert('Your account has been deleted by an administrator.');
+                        this.logout();
+                    }
+                })
+                .subscribe();
         }
     }
 

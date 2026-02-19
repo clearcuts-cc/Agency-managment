@@ -1549,17 +1549,42 @@ const NewApp = {
     },
 
 
+    toggleMembersDropdown() {
+        const list = document.getElementById('create-group-members-list');
+        const trigger = document.getElementById('members-dropdown-trigger');
+        if (!list) return;
+
+        const isHidden = list.style.display === 'none';
+        list.style.display = isHidden ? 'block' : 'none';
+
+        if (trigger) {
+            trigger.style.borderColor = isHidden ? '#3B82F6' : 'rgba(255,255,255,0.1)';
+            trigger.style.background = isHidden ? 'rgba(59, 130, 246, 0.05)' : 'rgba(255,255,255,0.03)';
+        }
+    },
+
     async openCreateGroupModal() {
         this.openModal('create-group-modal');
 
         // Populate Leader and Members lists
         const leaderSelect = document.getElementById('create-group-leader');
-        const membersSelect = document.getElementById('create-group-members-select');
+        const membersList = document.getElementById('create-group-members-list');
+        const dropdownLabel = document.getElementById('members-dropdown-label');
 
-        if (!leaderSelect || !membersSelect) return;
+        if (!leaderSelect || !membersList) return;
 
         leaderSelect.innerHTML = '<option value="">Select an employee...</option>';
-        membersSelect.innerHTML = '';
+        membersList.innerHTML = '';
+        if (dropdownLabel) dropdownLabel.textContent = 'Select employees...';
+        if (dropdownLabel) dropdownLabel.style.color = 'var(--text-muted)';
+
+        // Reset dropdown state
+        membersList.style.display = 'none';
+        const trigger = document.getElementById('members-dropdown-trigger');
+        if (trigger) {
+            trigger.style.borderColor = 'rgba(255,255,255,0.1)';
+            trigger.style.background = 'rgba(255,255,255,0.03)';
+        }
 
         try {
             const employees = await Storage.getEmployees();
@@ -1569,20 +1594,44 @@ const NewApp = {
                 `<option value="${emp.id}">${emp.name} (${emp.role || 'Employee'})</option>`
             ).join('');
 
-            // Populate Members Multi-select
-            membersSelect.innerHTML = employees.map(emp =>
-                `<option value="${emp.id}">${emp.name}</option>`
-            ).join('');
-
+            // Populate Members Custom Dropdown (Checkboxes)
             if (employees.length === 0) {
-                const opt = document.createElement('option');
-                opt.textContent = 'No employees available';
-                opt.disabled = true;
-                membersSelect.appendChild(opt);
+                membersList.innerHTML = '<div style="padding: 10px; color: var(--text-muted); text-align: center;">No employees available</div>';
+            } else {
+                membersList.innerHTML = employees.map(emp => `
+                    <label class="member-option" style="display: flex; align-items: center; padding: 10px; cursor: pointer; border-radius: 8px; transition: background 0.2s; margin-bottom: 4px;">
+                        <input type="checkbox" value="${emp.id}" data-name="${emp.name}" onchange="NewApp.updateMembersLabel()" style="margin-right: 12px; width: 16px; height: 16px; cursor: pointer;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="avatar-small" style="width: 24px; height: 24px; font-size: 0.7rem; background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center;">${Auth.getInitials(emp.name)}</div>
+                            <span style="font-size: 0.9rem;">${emp.name}</span>
+                        </div>
+                    </label>
+                `).join('');
+
+                // Add hover effect via JS since inline styles are limited
+                const options = membersList.querySelectorAll('.member-option');
+                options.forEach(opt => {
+                    opt.addEventListener('mouseenter', () => opt.style.background = 'rgba(255,255,255,0.05)');
+                    opt.addEventListener('mouseleave', () => opt.style.background = 'transparent');
+                });
             }
         } catch (error) {
             console.error('Error populating team modal:', error);
             this.showNotification('Error loading employees for group creation.', 'error');
+        }
+    },
+
+    updateMembersLabel() {
+        const checkboxes = document.querySelectorAll('#create-group-members-list input[type="checkbox"]:checked');
+        const label = document.getElementById('members-dropdown-label');
+        if (!label) return;
+
+        if (checkboxes.length === 0) {
+            label.textContent = 'Select employees...';
+            label.style.color = 'var(--text-muted)';
+        } else {
+            label.textContent = `${checkboxes.length} member${checkboxes.length > 1 ? 's' : ''} selected`;
+            label.style.color = 'var(--text-primary)';
         }
     },
 
@@ -1594,8 +1643,9 @@ const NewApp = {
         const desc = descInput.value.trim();
 
         const leaderId = document.getElementById('create-group-leader').value;
-        const membersSelect = document.getElementById('create-group-members-select');
-        const memberIds = Array.from(membersSelect.selectedOptions).map(opt => opt.value);
+        // Collect checked members
+        const checkboxes = document.querySelectorAll('#create-group-members-list input[type="checkbox"]:checked');
+        const memberIds = Array.from(checkboxes).map(cb => cb.value);
 
         if (!name || !leaderId) {
             this.showNotification('Group name and Leader are required', 'error');
