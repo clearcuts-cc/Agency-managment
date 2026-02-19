@@ -2167,6 +2167,25 @@ const NewApp = {
         return card;
     },
 
+    async deleteEmployee(id, name) {
+        if (!confirm(`Are you sure you want to delete employee "${name}"? This action cannot be undone.`)) return;
+
+        try {
+            await Storage.deleteEmployee(id);
+            this.showNotification(`Employee "${name}" deleted successfully`, 'success');
+            // Refresh the employee list
+            if (document.getElementById('employees-grid')) {
+                this.renderEmployeesPage();
+            } else {
+                // If on group page or other, maybe refresh that too?
+                // For now, simple refresh is sufficient.
+            }
+        } catch (error) {
+            console.error('Error deleting employee:', error);
+            this.showNotification('Failed to delete employee: ' + error.message, 'error');
+        }
+    },
+
     async openEditEmployeeModal(empId) {
         try {
             let employees = [];
