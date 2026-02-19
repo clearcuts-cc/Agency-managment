@@ -12,10 +12,15 @@ class Auth {
                     const user = session.user;
                     console.log('Global Auth Event:', event, user.email);
 
+                    // Quick sanity check: If we are "verifying", we should force update
+                    const isVerifying = document.getElementById('auth-overlay');
+
                     // 1. Check if we already have this user logged in locally
                     const currentLocal = this.getCurrentUser();
-                    if (currentLocal && currentLocal.email === user.email) {
-                        return; // Already synced
+
+                    // IF emails match AND we are not in a verification flow, we can skip
+                    if (currentLocal && currentLocal.email === user.email && !isVerifying) {
+                        return;
                     }
 
                     // 2. Sync Supabase Session to Local Storage
@@ -46,7 +51,7 @@ class Auth {
                     // 3. Update UI
                     // If we are on index.html, a reload ensures everything renders with the new user
                     if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
-                        // Clear hash to look clean
+                        // Clear hash to look clean and remove overlay
                         history.replaceState(null, null, 'index.html');
                         window.location.reload();
                     } else if (window.location.pathname.endsWith('login.html')) {
