@@ -37,11 +37,11 @@ class Auth {
         }
     }
 
-    static async createEmployee(name, email, password) {
+    static async createEmployee(name, email, password, team) {
         // ALWAYS prioritize Supabase Mode if available
         if (window.SupabaseService && window.supabase) {
             try {
-                await window.SupabaseService.createEmployee(email, password, name);
+                await window.SupabaseService.createEmployee(email, password, name, team);
                 return { success: true, message: 'Employee added! Verification email sent.' };
             } catch (error) {
                 return { success: false, message: error.message };
@@ -60,7 +60,8 @@ class Auth {
             password, // In a real app, this should be hashed!
             avatar: this.getInitials(name),
             joined: new Date().toISOString(),
-            role: 'Employee' // Explicit role
+            role: 'Employee', // Explicit role
+            team: team || null
         };
 
         this.users.push(newUser);
@@ -119,7 +120,8 @@ class Auth {
                     email: user.email,
                     name: user.user_metadata.full_name || email.split('@')[0],
                     avatar: this.getInitials(user.user_metadata.full_name || email),
-                    role: user.user_metadata.role || 'Admin'
+                    role: user.user_metadata.role || 'Admin',
+                    team: user.user_metadata.team || null
                 };
 
                 this.currentUser = appUser;

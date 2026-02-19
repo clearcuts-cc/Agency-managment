@@ -41,7 +41,7 @@ const NewApp = {
 
         // Initialize Modules
         if (typeof NotificationService !== 'undefined') {
-            // Poll for notifications every 10s (updated)
+            // Poll for notifications every 60s + Realtime
             NotificationService.startPolling(this.handleNewNotifications.bind(this));
             await this.updateNotificationBadge();
         }
@@ -102,6 +102,12 @@ const NewApp = {
             if (settingsNav) settingsNav.style.display = 'flex';
             if (createBtn) createBtn.style.display = 'flex';
             if (employeeDashboard) employeeDashboard.style.display = 'none';
+
+            // Update Label to differentiate from Admin
+            const adminLabel = adminSection ? adminSection.querySelector('p') : null;
+            if (adminLabel) {
+                adminLabel.textContent = isAdmin ? 'ADMIN' : 'MANAGEMENT';
+            }
         } else {
             // Employee sees ONLY Calendar & Tasks
             if (adminSection) adminSection.style.display = 'none';
@@ -135,36 +141,81 @@ const NewApp = {
     handleNewNotifications(notifications) {
         console.log('New notifications received:', notifications);
         this.updateNotificationBadge();
-        // Show toast
-        if (notifications.length > 0 && typeof this.showNotification === 'function') {
-            this.showNotification(`You have ${notifications.length} new notification(s)`);
+        // Toast removed as per user request (only red dot)
+        // if (notifications.length > 0 && typeof this.showNotification === 'function') {
+        //    this.showNotification(`You have ${notifications.length} new notification(s)`);
+        // }
+    },
+
+    async handleNotificationClick(notification) {
+        console.log('Notification clicked:', notification);
+
+        // Mark as read if not already
+        if (!notification.is_read) {
+            NotificationService.markAsRead(notification.id);
+        }
+
+        // Handle based on type
+        // Types: 'task_assigned', 'task_status_change', 'task_update', 'overdue' (smart)
+        if (notification.taskId || notification.related_id) {
+            const taskId = notification.taskId || notification.related_id;
+
+            // Switch to Tasks/Calendar view if not already there?
+            // Actually, we can open the modal from anywhere if we have the data.
+            // But if we are on 'settings' page, the modal might look weird or depend on other things?
+            // Let's safe-switch to 'calendar' or 'tasks' page first?
+            // "if that is task that redirect to task section and show that task" - User request.
+
+            // Redirect to Tasks section (which is actually 'calendar' in this app structure usually, 
+            // or we have a 'tasks' page which is the list view?)
+            // renderProjectsPage is the list view. renderCalendar is calendar.
+            // Let's go to list view for clarity? Or Calendar?
+            // User said "redirect to task section". 
+            // Let's assume 'tasks' (list view) or just open the modal on top of current view if possible.
+            // But changing view ensures context.
+
+            this.handleNavigation('tasks'); // Switch to tasks view for context
+
+            try {
+                // Fetch task details
+                // Storage.getTasks() is cached/fast.
+                const tasks = await Storage.getTasks();
+                const task = tasks.find(t => t.id == taskId); // loose equality for string/int safety
+
+                if (task) {
+                    if (typeof NewCalendar !== 'undefined' && NewCalendar.openEditTaskModal) {
+                        NewCalendar.openEditTaskModal(task);
+                    } else {
+                        console.error('NewCalendar module not loaded');
+                    }
+                } else {
+                    this.showNotification('Task not found or deleted.', 'error');
+                }
+            } catch (e) {
+                console.error('Error handling notification click:', e);
+            }
         }
     },
 
     async updateNotificationBadge() {
         if (typeof NotificationService === 'undefined') return;
 
+        // Delegate to NotificationService for consolidated badge logic (sidebar & footer)
+        await NotificationService.updateBadgeCount();
+
+        // Update the floating panel list (if any notifications exist)
         const notifications = await NotificationService.getNotifications();
-        const count = notifications.filter(n => !n.is_read).length;
-
-        const badge = document.getElementById('notification-count');
-        if (badge) {
-            badge.textContent = count;
-            badge.style.display = count > 0 ? 'flex' : 'none';
-        }
-
-        // Update panel list
         const list = document.getElementById('notification-list');
         if (list) {
             if (notifications.length === 0) {
                 list.innerHTML = '<p style="color:var(--text-secondary); font-size:0.8rem; text-align:center;">No new notifications</p>';
             } else {
-                list.innerHTML = notifications.map(n => `
-    < div style = "padding: 10px; border-bottom: 1px solid var(--border-color); ${!n.is_read ? 'background: rgba(79, 70, 229, 0.1);' : ''}" >
+                list.innerHTML = notifications.slice(0, 5).map(n => `
+                    <div style="padding: 10px; border-bottom: 1px solid var(--border-color); ${!n.is_read ? 'background: rgba(79, 70, 229, 0.1);' : ''}">
                         <p style="font-size: 0.9rem; margin-bottom: 4px;">${n.message}</p>
                         <span style="font-size: 0.7rem; color: var(--text-secondary);">${new Date(n.created_at).toLocaleString()}</span>
-                    </div >
-    `).join('');
+                    </div>
+                `).join('');
             }
         }
     },
@@ -545,7 +596,8 @@ const NewApp = {
             'cancel-employee': 'employee-modal',
             'cancel-edit-task': 'edit-task-modal',
             'cancel-edit-employee': 'edit-employee-modal',
-            'cancel-edit-client': 'edit-client-modal'
+            'cancel-edit-client': 'edit-client-modal',
+            'cancel-group': 'create-group-modal'
         };
 
         Object.keys(cancelMap).forEach(id => {
@@ -689,8 +741,10 @@ const NewApp = {
         });
 
         // Show Content
-        document.querySelectorAll('.page').forEach(page => {
+        const pages = document.querySelectorAll('.page');
+        pages.forEach(page => {
             page.classList.remove('active');
+            page.style.display = 'none'; // Force hide to override any inline styles
         });
 
         // Map 'tasks' and 'projects' to 'projects-page'
@@ -699,6 +753,7 @@ const NewApp = {
 
         if (activePage) {
             activePage.classList.add('active');
+            activePage.style.display = 'block'; // Force show
             this.currentPage = pageId;
 
             // Refresh content when switching pages
@@ -706,8 +761,12 @@ const NewApp = {
                 this.renderAnalytics();
             } else if (pageId === 'tasks' || pageId === 'projects') {
                 this.renderProjectsPage();
-            } else if (pageId === 'client-approvals') {
-                this.renderTeamPage();
+            } else if (pageId === 'group' || pageId === 'client-approvals') {
+                this.renderGroupPage();
+            } else if (pageId === 'employees') {
+                this.renderEmployeesPage();
+            } else if (pageId === 'clients') {
+                this.renderClientsPage();
             } else if (pageId === 'profile') {
                 this.loadSettings(); // loadSettings updates the profile inputs
             } else if (pageId === 'notifications') {
@@ -775,6 +834,14 @@ const NewApp = {
             editClientForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 this.handleEditClientSubmit();
+            });
+        }
+
+        const groupForm = document.getElementById('group-form');
+        if (groupForm) {
+            groupForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleCreateGroupSubmit();
             });
         }
 
@@ -885,11 +952,12 @@ const NewApp = {
             assigned_date: assignedDate
         };
 
-        // Admin can change assignee and client
+        // Admin and Group Leaders can change assignee and client
         const currentUser = Auth.getCurrentUser();
         const isAdmin = currentUser && currentUser.role && currentUser.role.toLowerCase() === 'admin';
+        const isGroupLeader = currentUser && (currentUser.role === 'Group Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Group Leader'));
 
-        if (isAdmin) {
+        if (isAdmin || isGroupLeader) {
             const assigneeSelect = document.getElementById('edit-task-assignee');
             const clientSelect = document.getElementById('edit-task-client');
 
@@ -949,13 +1017,25 @@ const NewApp = {
 
     async deleteCurrentTask() {
         const currentUser = Auth.getCurrentUser();
-        if (!currentUser || (currentUser.role !== 'Admin' && (!currentUser.user_metadata || currentUser.user_metadata.role !== 'Admin'))) {
-            this.showNotification('Permission Denied: Only Admins can delete projects.', 'error');
-            return;
-        }
+        const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+        const isGroupLeader = currentUser && (currentUser.role === 'Group Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Group Leader'));
 
         const taskId = document.getElementById('edit-task-id').value;
         if (!taskId) return;
+
+        // Scoping check for Group Leader
+        if (!isAdmin && isGroupLeader) {
+            const task = await Storage.getTaskById(taskId);
+            // Since Storage.getTasks() (and thus getTaskById) is scoped for TLs,
+            // if we can't find the task, it means it's outside their group.
+            if (!task) {
+                this.showNotification('Permission Denied: You can only delete tasks within your group.', 'error');
+                return;
+            }
+        } else if (!isAdmin) {
+            this.showNotification('Permission Denied: Only Admins and Group Leaders can delete projects.', 'error');
+            return;
+        }
 
         const title = document.getElementById('edit-task-title').value || 'this task';
         if (!confirm(`Are you sure you want to delete "${title}" ? This action cannot be undone.`)) {
@@ -1001,7 +1081,7 @@ const NewApp = {
             this.showNotification('Client added successfully!', 'success');
 
             // Refresh visuals
-            this.renderTeamPage();
+            this.renderClientsPage();
             this.populateTaskDropdowns();
         } catch (error) {
             console.error('Failed to add client:', error);
@@ -1013,20 +1093,29 @@ const NewApp = {
         const nameInput = document.getElementById('employee-name');
         const emailInput = document.getElementById('employee-email');
         const passInput = document.getElementById('employee-password');
+        const groupInput = document.getElementById('employee-group');
 
         const name = nameInput.value.trim();
         const email = emailInput.value.trim();
         const password = passInput.value;
+        const group = null; // Group logic simplified per user request
 
         // Use Auth to resolve creation
-        const result = await Auth.createEmployee(name, email, password);
+        const result = await Auth.createEmployee(name, email, password, group);
 
         if (result.success) {
             this.closeModal('employee-modal');
             this.showNotification(result.message || 'Employee account created successfully!');
 
-            // Refresh Team List
-            this.renderTeamPage();
+            // Refresh Views
+            if (this.currentGroupId && this.currentGroupName === group) {
+                // If we are in the detail view of the group we just added a member to
+                this.renderGroupMembers(this.currentGroupName);
+            } else {
+                // otherwise go back to main list
+                this.renderGroupPage();
+            }
+            this.renderEmployeesPage(); // Sync with new Employees module
 
             // Reset form
             nameInput.value = '';
@@ -1240,101 +1329,500 @@ const NewApp = {
         }
     },
 
+    escapeHtml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    },
+
+
 
     filterAnalytics(period) {
         console.log('Filter analytics by:', period);
         // Implement period filtering logic here
     },
 
-    // ===== Team & Clients Rendering =====
-    async renderTeamPage() {
-        const empContainer = document.getElementById('employee-list-container');
+    // ===== Group Rendering & CRUD =====
+    async renderGroupPage() {
+        const groupsGrid = document.getElementById('groups-grid');
+        try {
+            const createBtn = document.getElementById('create-group-btn');
+
+            // Reset Views
+            const detailView = document.getElementById('group-detail-view');
+            if (detailView) detailView.style.display = 'none';
+            if (groupsGrid) groupsGrid.style.display = 'grid';
+
+            // Check Permissions
+            const currentUser = Auth.getCurrentUser();
+            const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+
+            if (createBtn) createBtn.style.display = isAdmin ? 'flex' : 'none';
+
+            if (!groupsGrid) return;
+
+            // Fetch Data
+            const groups = await Storage.getGroups();
+            const employees = await Storage.getEmployees();
+
+            // Group Leader Scoping
+            let filteredGroups = groups;
+            if (!isAdmin && (currentUser.role === 'Group Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Group Leader'))) {
+                const tlGroupName = currentUser.group || (currentUser.user_metadata && currentUser.user_metadata.group);
+                if (tlGroupName) {
+                    filteredGroups = groups.filter(t => t.name === tlGroupName);
+                } else {
+                    filteredGroups = [];
+                }
+            }
+
+            if (filteredGroups.length === 0) {
+                groupsGrid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.2;">👥</div>
+                        <p>${isAdmin ? 'No groups created yet.' : 'You are not assigned to any group.'}</p>
+                        ${isAdmin ? '<p style="font-size: 0.9rem; opacity: 0.8;">Click "Create Group" to get started.</p>' : ''}
+                    </div>
+                `;
+                return;
+            }
+
+            groupsGrid.innerHTML = filteredGroups.map(group => {
+                const groupEmployees = employees.filter(e => e.team === group.name || e.group === group.name);
+                const memberCount = groupEmployees.length;
+
+                // Find leader for this group
+                const leader = groupEmployees.find(e => (e.role || '').toLowerCase() === 'team leader' || (e.role || '').toLowerCase() === 'tl' || (e.role || '').toLowerCase() === 'group leader');
+                const leaderName = leader ? leader.name : 'No Leader Assigned';
+
+                return `
+                <div class="stat-card group-card" onclick="NewApp.openGroupDetail('${group.id}')" style="cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color); position: relative; padding-bottom: 4.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                        <div style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${this.escapeHtml(group.name)}</h3>
+                                <span style="font-size: 0.75rem; padding: 4px 10px; background: rgba(79, 70, 229, 0.1); color: var(--primary-color); border-radius: 20px; font-weight: 600;">ACTIVE</span>
+                            </div>
+                            <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                ${this.escapeHtml(group.description || 'Our agency task force responsible for creative delivery and client satisfaction.')}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 0.875rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary-color); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">
+                                ${Auth.getInitials(leaderName)}
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Group Leader</div>
+                                <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">${this.escapeHtml(leaderName)}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div style="width: 32px; height: 32px; border-radius: 50%; background: #22c55e; color: white; display: flex; align-items: center; justify-content: center;">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                </svg>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Resources</div>
+                                <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">${memberCount} Members Active</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="position: absolute; bottom: 1.25rem; left: 1rem; right: 1rem; display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary" style="flex: 1; padding: 0.6rem; font-size: 0.85rem; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 0.5rem; text-transform: uppercase; font-weight: 700;" onclick="event.stopPropagation(); NewApp.openGroupDetail('${group.id}')">
+                            ACCESS GROUP
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                        ${isAdmin ? `
+                        <button class="action-btn delete" onclick="event.stopPropagation(); NewApp.deleteGroup('${group.id}', '${this.escapeHtml(group.name)}')" title="Delete Group" style="color: #ef4444; padding: 8px; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; background: rgba(239, 68, 68, 0.1);">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                        ` : ''}
+                    </div>
+                </div>
+        `;
+            }).join('');
+        } catch (error) {
+            console.error('Error rendering groups page:', error);
+            if (groupsGrid) {
+                groupsGrid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 2rem;">
+                        <p>Error loading groups. Please try refreshing the page.</p>
+                        <p style="font-size: 0.8rem; opacity: 0.7;">${this.escapeHtml(error.message)}</p>
+                    </div>
+                `;
+            }
+        }
+    },
+
+    async renderEmployeesPage() {
+        const grid = document.getElementById('employees-grid');
+        if (!grid) return;
+
+        const currentUser = Auth.getCurrentUser();
+        const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+
+        try {
+            const employees = await Storage.getEmployees();
+
+            if (employees.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.2;">👤</div>
+                        <p>No employees found.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = employees.map(emp => {
+                const initials = emp.avatar || (emp.name ? Auth.getInitials(emp.name) : 'EE');
+                const isEmployeeTL = (emp.role || '').toLowerCase() === 'team leader' || (emp.role || '').toLowerCase() === 'tl';
+
+                return `
+                <div class="stat-card employee-card" style="padding: 1.5rem; border: 1px solid var(--border-color); position: relative;">
+        ${isAdmin ? `
+                    <div style="position: absolute; top: 1rem; right: 1rem; display: flex; gap: 0.5rem;">
+                        <button class="action-btn edit" onclick="NewApp.openEditEmployeeModal('${emp.id}')" title="Edit Employee">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
+                            </svg>
+                        </button>
+                        <button class="action-btn delete" onclick="NewApp.deleteEmployee('${emp.id}', '${emp.name}')" title="Delete Employee" style="color: #ef4444;">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    ` : ''
+                    }
+
+<div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+    <div class="user-avatar" style="width: 64px; height: 64px; font-size: 1.5rem; margin-bottom: 1rem; background: var(--bg-card); border: 2px solid var(--border-color);">
+        ${initials}
+    </div>
+    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">${emp.name}</h3>
+    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem;">
+        <span class="task-badge" style="background: rgba(59, 130, 246, 0.1); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.2); font-size: 0.7rem;">
+            ${emp.role || 'Employee'}
+        </span>
+        ${emp.team ? `
+                            <span class="task-badge" style="background: rgba(139, 92, 246, 0.1); color: #A78BFA; border: 1px solid rgba(139, 92, 246, 0.2); font-size: 0.7rem;">
+                                ${emp.team}
+                            </span>
+                            ` : `
+                            <span class="task-badge" style="background: rgba(107, 114, 128, 0.1); color: #9CA3AF; border: 1px solid rgba(107, 114, 128, 0.2); font-size: 0.7rem;">
+                                Unassigned
+                            </span>
+                            `}
+    </div>
+    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+        ${emp.email}
+    </div>
+
+                    </div>
+                </div>
+            `;
+            }).join('');
+        } catch (error) {
+            console.error('Error rendering employees page:', error);
+            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: #ef4444;">Error loading employees: ${error.message}</div>`;
+        }
+    },
+
+
+    async openCreateGroupModal() {
+        this.openModal('create-group-modal');
+
+        // Populate Leader and Members lists
+        const leaderSelect = document.getElementById('create-group-leader');
+        const membersSelect = document.getElementById('create-group-members-select');
+
+        if (!leaderSelect || !membersSelect) return;
+
+        leaderSelect.innerHTML = '<option value="">Select an employee...</option>';
+        membersSelect.innerHTML = '';
+
+        try {
+            const employees = await Storage.getEmployees();
+
+            // Populate Leader Dropdown
+            leaderSelect.innerHTML += employees.map(emp =>
+                `<option value="${emp.id}">${emp.name} (${emp.role || 'Employee'})</option>`
+            ).join('');
+
+            // Populate Members Multi-select
+            membersSelect.innerHTML = employees.map(emp =>
+                `<option value="${emp.id}">${emp.name}</option>`
+            ).join('');
+
+            if (employees.length === 0) {
+                const opt = document.createElement('option');
+                opt.textContent = 'No employees available';
+                opt.disabled = true;
+                membersSelect.appendChild(opt);
+            }
+        } catch (error) {
+            console.error('Error populating team modal:', error);
+            this.showNotification('Error loading employees for group creation.', 'error');
+        }
+    },
+
+    async handleCreateGroupSubmit() {
+        const nameInput = document.getElementById('create-group-name');
+        const descInput = document.getElementById('create-group-desc');
+
+        const name = nameInput.value.trim();
+        const desc = descInput.value.trim();
+
+        const leaderId = document.getElementById('create-group-leader').value;
+        const membersSelect = document.getElementById('create-group-members-select');
+        const memberIds = Array.from(membersSelect.selectedOptions).map(opt => opt.value);
+
+        if (!name || !leaderId) {
+            this.showNotification('Group name and Leader are required', 'error');
+            return;
+        }
+
+        try {
+            // 1. Create the Group
+            const team = await Storage.addTeam(name, desc);
+
+            // 2. Assign Leader role and group
+            const employees = await Storage.getEmployees();
+            const leader = employees.find(e => e.id === leaderId);
+
+            if (leader) {
+                // Update Leader role and group in Supabase/Local
+                if (typeof SupabaseService !== 'undefined' && window.supabase) {
+                    await window.supabase.from('users').update({ role: 'Team Leader', team: name }).eq('id', leaderId);
+                } else {
+                    let users = JSON.parse(localStorage.getItem('contentflow_users')) || [];
+                    users = users.map(u => u.id === leaderId ? { ...u, role: 'Team Leader', team: name } : u);
+                    localStorage.setItem('contentflow_users', JSON.stringify(users));
+                }
+
+                // Send Notification to Leader
+                await NotificationService.createNotification(
+                    leaderId,
+                    `You have been appointed as the Group Leader for "${name}".You now have management access for this group.`,
+                    'success'
+                );
+            }
+
+            // 3. Assign Members to group
+            for (const mId of memberIds) {
+                if (typeof SupabaseService !== 'undefined' && window.supabase) {
+                    await window.supabase.from('users').update({ team: name }).eq('id', mId);
+                } else {
+                    let users = JSON.parse(localStorage.getItem('contentflow_users')) || [];
+                    users = users.map(u => u.id === mId ? { ...u, team: name } : u);
+                    localStorage.setItem('contentflow_users', JSON.stringify(users));
+                }
+
+                // Send Notification to Members (only if not the leader who already got one)
+                if (mId !== leaderId) {
+                    await NotificationService.createNotification(
+                        mId,
+                        `You have been added to the new group: "${name}".`,
+                        'info'
+                    );
+                }
+            }
+
+            this.showNotification(`Group "${name}" created with ${memberIds.length} members!`, 'success');
+            this.closeModal('create-group-modal');
+
+            // Reset form
+            nameInput.value = '';
+            descInput.value = '';
+            this.renderGroupPage();
+            if (this.renderEmployeesPage) this.renderEmployeesPage(); // Sync Employees module
+        } catch (error) {
+            console.error('Error creating group:', error);
+            this.showNotification('Failed to create group: ' + error.message, 'error');
+        }
+    },
+
+    async deleteGroup(id, name) {
+        if (!confirm(`Are you sure you want to delete the group "${name}" ? This will NOT delete the employees, but they will become unassigned.`)) return;
+
+        try {
+            // Optional: Update users who were in this team to remove team assignment?
+            // For now, we just delete the team definition. The string match in renderTeamPage will just fail to match, 
+            // effectively making them unassigned or we should explicitly update them.
+            // Let's implement explicit update for data integrity.
+            const employees = await Storage.getEmployees();
+            const teamMembers = employees.filter(e => e.team === name);
+
+            // We need to update these users to have team = null
+            // This might be slow if many users. For MVP, we'll just delete the team.
+            // The grouped logic checks user.team. If we delete the team entity, the user still has user.team = "Marketing".
+            // So if we re-create "Marketing", they rejoin? Yes.
+            // Text based linking is loose but flexible. 
+
+            await Storage.deleteGroup(id);
+            this.showNotification('Group deleted successfully', 'success');
+            this.renderGroupPage();
+        } catch (error) {
+            console.error('Error deleting group:', error);
+            this.showNotification('Failed to delete group', 'error');
+        }
+    },
+
+    // ===== Group Detail View =====
+    async openGroupDetail(groupId) {
+        document.getElementById('groups-grid').style.display = 'none';
+        document.getElementById('create-group-btn').style.display = 'none';
+        const detailView = document.getElementById('group-detail-view');
+        detailView.style.display = 'block';
+
+        const group = await Storage.getGroupById(groupId);
+        if (!group) {
+            this.closeGroupDetail();
+            return;
+        }
+
+        document.getElementById('detail-group-name').textContent = group.name;
+        document.getElementById('detail-group-desc').textContent = group.description || 'No description provided.';
+
+        // Store current group info for member management
+        this.currentGroupName = group.name;
+
+        await this.renderGroupMembers(group.name);
+    },
+
+    closeGroupDetail() {
+        document.getElementById('group-detail-view').style.display = 'none';
+        document.getElementById('groups-grid').style.display = 'grid';
+
+        const currentUser = Auth.getCurrentUser();
+        const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+        if (isAdmin) document.getElementById('create-group-btn').style.display = 'flex';
+
+        this.currentGroupName = null;
+    },
+
+    async renderGroupMembers(groupName) {
+        const grid = document.getElementById('group-members-grid');
+        if (!grid) return;
+
+        grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 2rem;">Loading group members...</p>';
+
+        try {
+            const employees = await Storage.getEmployees();
+            const groupMembers = employees.filter(e => e.team === groupName || e.group === groupName);
+
+            if (groupMembers.length === 0) {
+                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--text-muted);">No members assigned to this group yet.</p>';
+                return;
+            }
+
+            grid.innerHTML = groupMembers.map(emp => {
+                const initials = emp.avatar || (emp.name ? Auth.getInitials(emp.name) : 'EE');
+                const isLeader = (emp.role || '').toLowerCase() === 'team leader' || (emp.role || '').toLowerCase() === 'tl' || (emp.role || '').toLowerCase() === 'group leader';
+
+                return `
+                <div class="stat-card" style="padding: 1rem; display: flex; align-items: center; gap: 1rem; border: 1px solid var(--border-color);">
+                    <div class="user-avatar" style="width: 48px; height: 48px; font-size: 1.1rem; background: ${isLeader ? 'var(--primary-color)' : 'var(--bg-card)'}; color: ${isLeader ? 'white' : 'var(--text-primary)'};">
+                        ${initials}
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 1rem;">${emp.name}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">${emp.role || 'Employee'}</div>
+                    </div>
+                    ${isLeader ? '<span class="task-badge" style="background: rgba(79, 70, 229, 0.1); color: var(--primary-color);">LEADER</span>' : ''}
+                </div>
+                `;
+            }).join('');
+        } catch (error) {
+            console.error('Error rendering group members:', error);
+            grid.innerHTML = '<p style="color: #ef4444; text-align: center;">Error loading members.</p>';
+        }
+    },
+
+    openAddEmployeeModal() {
+        this.openModal('employee-modal');
+        // Clear fields in case it was used before
+        const nameInput = document.getElementById('employee-name');
+        const emailInput = document.getElementById('employee-email');
+        const passInput = document.getElementById('employee-password');
+        const groupInput = document.getElementById('employee-team'); // Using the existing ID for team/group
+
+        if (nameInput) nameInput.value = '';
+        if (emailInput) emailInput.value = '';
+        if (passInput) passInput.value = '';
+        if (groupInput) groupInput.value = '';
+    },
+
+    openAddGroupMemberModal() {
+        // Open the existing Add Employee modal, but pre-fill the group
+        this.openAddEmployeeModal();
+        if (this.currentGroupName) {
+            setTimeout(() => {
+                const groupInput = document.getElementById('employee-team');
+                if (groupInput) groupInput.value = this.currentGroupName;
+            }, 100);
+        }
+    },
+
+    async renderClientsPage() {
         const clientContainer = document.getElementById('client-list-container');
         const currentUser = Auth.getCurrentUser();
         const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
 
-        if (!empContainer && !clientContainer) return;
-
-        // Employees
-        if (empContainer) {
-            let employees = [];
-            try {
-                employees = await Storage.getEmployees();
-            } catch (error) {
-                console.error('Failed to fetch employees for Team Page:', error);
-            }
-
-            if (employees.length === 0) {
-                empContainer.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--text-secondary);">No employees added yet</div>';
-            } else {
-                empContainer.innerHTML = employees.map(emp => {
-                    const initials = emp.avatar || (emp.name ? Auth.getInitials(emp.name) : 'EE');
-                    return `
-                    <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 1rem;">
-                        <div class="user-avatar" style="width: 40px; height: 40px; font-size: 1rem;">${initials}</div>
-                        <div style="flex:1;">
-                            <div style="font-weight: 500; font-size: 0.95rem;">${emp.name}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${emp.email}</div>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                             <span class="task-badge" style="background: rgba(59, 130, 246, 0.1); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.2); margin-right: 0.5rem;">${emp.role || 'Employee'}</span>
-                             <button class="action-btn edit" onclick="NewApp.openEditEmployeeModal('${emp.id}')" title="Edit Employee">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
-                                </svg>
-                             </button>
-                             ${isAdmin ? `
-                             <button class="action-btn delete" onclick="NewApp.deleteEmployee('${emp.id}', '${emp.name}')" title="Delete Employee" style="color: #ef4444;">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                                    <line x1="14" y1="11" x2="14" y2="17"></line>
-                                </svg>
-                             </button>
-                             ` : ''}
-                        </div>
-                    </div>
-    `;
-                }).join('');
-            }
-        }
+        if (!clientContainer) return;
 
         // Clients
-        if (clientContainer) {
-            const clients = await Storage.getClients();
-            if (clients.length === 0) {
-                clientContainer.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--text-secondary);">No clients added yet</div>';
-            } else {
-                clientContainer.innerHTML = clients.map(client => `
-                    <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
-                        <div style="flex:1;">
-                            <div style="font-weight: 500; font-size: 0.95rem;">${client.name}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.8;">${client.address || 'No Address Provided'}</div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">${client.email} | ${client.phone || 'No Phone'}</div>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                             <button class="action-btn edit" onclick="NewApp.openEditClientModal('${client.id}')" title="Edit Client">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
-                                </svg>
-                             </button>
-                             ${isAdmin ? `
-                             <button class="action-btn delete" onclick="NewApp.deleteClient('${client.id}', '${client.name}')" title="Delete Client" style="color: #ef4444;">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                                    <line x1="14" y1="11" x2="14" y2="17"></line>
-                                </svg>
-                             </button>
-                             ` : ''}
-                        </div>
-                    </div>
-    `).join('');
-            }
+        const clients = await Storage.getClients();
+        if (clients.length === 0) {
+            clientContainer.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--text-secondary);">No clients added yet</div>';
+        } else {
+            clientContainer.innerHTML = clients.map(client => `
+            <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+                <div style="flex:1;">
+                    <div style="font-weight: 500; font-size: 0.95rem;">${client.name}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); opacity: 0.8;">${client.address || 'No Address Provided'}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">${client.email} | ${client.phone || 'No Phone'}</div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                     <button class="action-btn edit" onclick="NewApp.openEditClientModal('${client.id}')" title="Edit Client">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
+                        </svg>
+                     </button>
+                     ${isAdmin ? `
+                     <button class="action-btn delete" onclick="NewApp.deleteClient('${client.id}', '${client.name}')" title="Delete Client" style="color: #ef4444;">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
+                     </button>
+                     ` : ''}
+                </div>
+            </div>
+            `).join('');
         }
     },
 
@@ -1367,7 +1855,7 @@ const NewApp = {
         const isTeamLeader = currentUser && (currentUser.role === 'Team Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Team Leader'));
 
         if (!isAdmin && !isTeamLeader && currentUser) {
-            // Filter tasks to only those assigned to current user
+            // Standard Employee: Filter tasks to only those assigned to current user
             allTasks = allTasks.filter(t => (t.assignee_id || t.assigneeId) === currentUser.id);
 
             // Filter clients to only those having at least one task assigned to this user
@@ -1375,6 +1863,8 @@ const NewApp = {
                 allTasks.some(t => (t.client_id || t.clientId) === client.id)
             );
         }
+        // Note: For Team Leaders, Storage.getClients and Storage.getTasks are ALREADY scoped by team.
+        // So no extra manual filtering is needed here. They will see all team tasks and all tea-related clients.
 
         // Compute Aggregate Stats for Dashboard
         const totalTasks = allTasks.length;
@@ -1416,7 +1906,7 @@ const NewApp = {
             const safeId = this.escapeHtml(client.id);
 
             return `
-                <div class="stat-card project-card" onclick="NewApp.openProjectDetail('${safeId}')" style="cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color);">
+    <div class="stat-card project-card" onclick="NewApp.openProjectDetail('${safeId}')" style="cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color);">
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
                     <div>
                         <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">${safeName}</h3>
@@ -1427,7 +1917,7 @@ const NewApp = {
                     </div>
                 </div>
 
-                <!--Stats removed as per user request-- >
+                <!-- Stats removed as per user request -->
                 <div style="margin-bottom: 1rem;"></div>
 
                 <div class="progress-bar" style="height: 6px;">
@@ -1469,10 +1959,13 @@ const NewApp = {
         // User scoping
         const currentUser = Auth.getCurrentUser();
         const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+        const isTeamLeader = currentUser && (currentUser.role === 'Team Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Team Leader'));
 
-        if (!isAdmin && currentUser) {
+        if (!isAdmin && !isTeamLeader && currentUser) {
+            // Standard Employee: Only see their own tasks
             allTasks = allTasks.filter(t => (t.assignee_id || t.assigneeId) === currentUser.id);
         }
+        // Team Leaders: Storage.getTasks() is already scoped to their team, so they see all team tasks.
 
         const clientTasks = allTasks.filter(t => (t.client_id || t.clientId) === clientId);
 
@@ -1484,7 +1977,7 @@ const NewApp = {
             const done = clientTasks.filter(t => t.status === 'Done').length;
 
             const createCard = (label, count, colorClass) => `
-                <div class="stat-card" style="padding: 1rem;">
+    <div class="stat-card" style="padding: 1rem;">
                     <div class="stat-value" style="font-size: 1.5rem;">${count}</div>
                     <div class="stat-label">${label}</div>
                 </div>
@@ -1576,25 +2069,28 @@ const NewApp = {
 
         // Add click handler to open edit modal
         card.addEventListener('click', () => {
-            NewCalendar.openEditTaskModal(task);
+            NewCalendar.openTaskModal(task);
         });
 
         const statusColors = {
             'Pending': 'rgba(245, 158, 11, 0.25)',
             'In Progress': 'rgba(59, 130, 246, 0.25)',
-            'Done': 'rgba(16, 185, 129, 0.25)'
+            'Done': 'rgba(16, 185, 129, 0.25)',
+            'Cancel': 'rgba(107, 114, 128, 0.25)'
         };
 
         const statusBorderColors = {
             'Pending': 'rgba(245, 158, 11, 0.6)',
             'In Progress': 'rgba(59, 130, 246, 0.6)',
-            'Done': 'rgba(16, 185, 129, 0.6)'
+            'Done': 'rgba(16, 185, 129, 0.6)',
+            'Cancel': 'rgba(107, 114, 128, 0.6)'
         };
 
         const statusTextColors = {
             'Pending': '#F59E0B',
             'In Progress': '#3B82F6',
-            'Done': '#10B981'
+            'Done': '#10B981',
+            'Cancel': '#9CA3AF'
         };
 
         const stageColors = {
@@ -1616,49 +2112,49 @@ const NewApp = {
         };
 
         card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: start;">
-                <div style="flex: 1;">
-                    <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem; font-weight: 600;">${this.escapeHtml(task.title)}</h3>
-                    <div style="display: flex; gap: 1rem; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                        <span>📁 ${this.escapeHtml(task.project)}</span>
-                        <span>👤 ${this.escapeHtml(task.assignee)}</span>
-                        <span>📅 ${this.formatDate(task.deadline)}</span>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <span class="task-badge" style="
-                            padding: 0.375rem 0.875rem; 
-                            background: ${statusColors[task.status]}; 
-                            border: 1px solid ${statusBorderColors[task.status]};
-                            color: ${statusTextColors[task.status]}; 
-                            border-radius: 6px; 
-                            font-size: 0.75rem; 
-                            font-weight: 600;
-                            backdrop-filter: blur(10px);
-                        ">${task.status}</span>
-                        <span class="task-badge" style="
-                            padding: 0.375rem 0.875rem; 
-                            background: ${stageColors[task.stage] || 'rgba(255, 255, 255, 0.1)'}; 
-                            border: 1px solid ${stageBorderColors[task.stage] || 'rgba(255, 255, 255, 0.2)'}; 
-                            color: var(--text-primary);
-                            border-radius: 6px; 
-                            font-size: 0.75rem;
-                            backdrop-filter: blur(10px);
-                        ">${task.stage}</span>
-                        <span class="task-badge priority-badge priority-${task.priority.toLowerCase()}" style="
-                            padding: 0.375rem 0.875rem; 
-                            border-radius: 6px; 
-                            font-size: 0.75rem;
-                        ">${task.priority}</span>
-                    </div>
+        <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div style="flex: 1;">
+                <h3 style="font-size: 1.125rem; margin-bottom: 0.5rem; font-weight: 600;">${this.escapeHtml(task.title)}</h3>
+                <div style="display: flex; gap: 1rem; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                    <span>📁 ${this.escapeHtml(task.project)}</span>
+                    <span>👤 ${this.escapeHtml(task.assignee)}</span>
+                    <span>📅 ${this.formatDate(task.deadline)}</span>
                 </div>
-                <div class="action-btn edit" style="margin-left: 10px;">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
-                    </svg>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <span class="task-badge" style="
+                        padding: 0.375rem 0.875rem; 
+                        background: ${statusColors[task.status]}; 
+                        border: 1px solid ${statusBorderColors[task.status]};
+                        color: ${statusTextColors[task.status]}; 
+                        border-radius: 6px; 
+                        font-size: 0.75rem; 
+                        font-weight: 600;
+                        backdrop-filter: blur(10px);
+                    ">${task.status}</span>
+                    <span class="task-badge" style="
+                        padding: 0.375rem 0.875rem; 
+                        background: ${stageColors[task.stage] || 'rgba(255, 255, 255, 0.1)'}; 
+                        border: 1px solid ${stageBorderColors[task.stage] || 'rgba(255, 255, 255, 0.2)'}; 
+                        color: var(--text-primary);
+                        border-radius: 6px; 
+                        font-size: 0.75rem;
+                        backdrop-filter: blur(10px);
+                    ">${task.stage}</span>
+                    <span class="task-badge priority-badge priority-${task.priority.toLowerCase()}" style="
+                        padding: 0.375rem 0.875rem; 
+                        border-radius: 6px; 
+                        font-size: 0.75rem;
+                    ">${task.priority}</span>
                 </div>
-            </div >
-    `;
+            </div>
+            <div class="action-btn edit" style="margin-left: 10px;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
+                </svg>
+            </div>
+        </div>
+        `;
 
         const editBtn = card.querySelector('.action-btn.edit');
         if (editBtn) {
@@ -1685,7 +2181,14 @@ const NewApp = {
 
             document.getElementById('edit-employee-id').value = emp.id;
             document.getElementById('edit-employee-name').value = emp.name;
-            document.getElementById('edit-employee-role').value = emp.role || 'Employee';
+            document.getElementById('edit-employee-email').value = emp.email || '';
+            // Role is no longer editable in this modal
+            if (document.getElementById('edit-employee-role')) {
+                document.getElementById('edit-employee-role').value = emp.role || 'Employee';
+            }
+            if (document.getElementById('edit-employee-team')) {
+                document.getElementById('edit-employee-team').value = emp.team || '';
+            }
 
             this.openModal('edit-employee-modal');
         } catch (error) {
@@ -1696,25 +2199,66 @@ const NewApp = {
     async handleEditEmployeeSubmit() {
         const id = document.getElementById('edit-employee-id').value;
         const name = document.getElementById('edit-employee-name').value;
-        const role = document.getElementById('edit-employee-role').value;
+        const email = document.getElementById('edit-employee-email').value;
+        const password = document.getElementById('edit-employee-password').value;
+        const role = 'Employee'; // Role logic simplified per user request
+
+        const currentUser = Auth.getCurrentUser();
+        const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+        const isTeamLeader = currentUser && (currentUser.role === 'Team Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Team Leader'));
 
         try {
+            // Permission Check
+            if (!isAdmin) {
+                if (isTeamLeader) {
+                    // TL can only edit if the member is in their team
+                    const member = (await Storage.getEmployees()).find(e => e.id === id);
+                    const currentTLTeam = currentUser.team || (currentUser.user_metadata && currentUser.user_metadata.team);
+                    if (!member || member.team !== currentTLTeam) {
+                        this.showNotification('Permission Denied: You can only edit members of your own team.', 'error');
+                        return;
+                    }
+                } else {
+                    this.showNotification('Permission Denied: Only Admins and Team Leaders can edit employees.', 'error');
+                    return;
+                }
+
+                // Prevent TL from promoting to Admin
+                if (role === 'Admin') {
+                    this.showNotification('Permission Denied: Team Leaders cannot assign Admin roles.', 'error');
+                    return;
+                }
+            }
+
             if (typeof SupabaseService !== 'undefined' && window.supabase) {
+                const updateData = { name, email };
+                if (password) updateData.password = password; // Only update if provided
+                // Role is not updated via this modal, it's fixed to 'Employee' if it were to be set.
+
                 const { error } = await window.supabase
                     .from('users')
-                    .update({ name, role })
+                    .update(updateData)
                     .eq('id', id);
 
                 if (error) throw error;
             } else {
                 let users = JSON.parse(localStorage.getItem('contentflow_users')) || [];
-                users = users.map(u => u.id === id ? { ...u, name, role } : u);
+                users = users.map(u => {
+                    if (u.id === id) {
+                        const updated = { ...u, name, email };
+                        if (password) updated.password = password;
+                        // Role is not updated via this modal, it's fixed to 'Employee' if it were to be set.
+                        return updated;
+                    }
+                    return u;
+                });
                 localStorage.setItem('contentflow_users', JSON.stringify(users));
             }
 
             this.closeModal('edit-employee-modal');
             this.showNotification('Employee updated successfully!');
-            this.renderTeamPage();
+            this.renderGroupPage(); // Correcting to renderGroupPage as per previous rebranding
+            this.renderEmployeesPage(); // Sync with new Employees module
         } catch (error) {
             console.error('Failed to update employee:', error);
             this.showNotification('Error updating employee: ' + error.message, 'error');
@@ -1750,20 +2294,82 @@ const NewApp = {
 
             this.closeModal('edit-client-modal');
             this.showNotification('Client updated successfully!');
-            this.renderTeamPage();
+            this.renderClientsPage();
         } catch (error) {
             console.error('Failed to update client:', error);
             this.showNotification('Error updating client: ' + error.message, 'error');
         }
     },
 
+    async promoteToTeamLeader(id, name, email, team) {
+        if (!confirm(`Are you sure you want to promote ${name} to Team Leader of "${team || 'Unassigned'}" ? `)) return;
+
+        try {
+            // 1. Update Role in DB/Storage
+            if (typeof SupabaseService !== 'undefined' && window.supabase) {
+                const { error } = await window.supabase
+                    .from('users')
+                    .update({ role: 'Team Leader' })
+                    .eq('id', id);
+                if (error) throw error;
+            } else {
+                let users = JSON.parse(localStorage.getItem('contentflow_users')) || [];
+                users = users.map(u => u.id === id ? { ...u, role: 'Team Leader' } : u);
+                localStorage.setItem('contentflow_users', JSON.stringify(users));
+            }
+
+            // 2. Mock Email Notification
+            const emailBody = `
+Subject: You have been promoted!
+
+Dear ${name},
+
+Congratulations! You have been promoted to Team Leader${team ? ' of the ' + team + ' Team' : ''}.
+You now have access to team management and analytics features.
+
+Best regards,
+    Agency Admin
+        `;
+            console.log(`% c[MOCK EMAIL SENT]To: ${email} \n${emailBody} `, 'color: #10B981; font-weight: bold;');
+            this.showNotification(`Email sent to ${email}. Promoted to Team Leader!`, 'success');
+
+            // 3. Refresh UI
+            this.renderTeamPage();
+            this.renderEmployeesPage(); // Sync with new Employees module
+        } catch (error) {
+            console.error('Promotion failed:', error);
+            this.showNotification('Failed to promote user: ' + error.message, 'error');
+        }
+    },
+
     async deleteEmployee(id, name) {
+        const currentUser = Auth.getCurrentUser();
+        const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+        const isTeamLeader = currentUser && (currentUser.role === 'Team Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Team Leader'));
+
         if (!confirm(`Are you sure you want to delete employee "${name}" ? This action cannot be undone.`)) return;
 
         try {
+            // Permission Check for TL
+            if (!isAdmin && isTeamLeader) {
+                // We need to check if the target employee belongs to the TL's team
+                const employees = await Storage.getEmployees();
+                const empToDelete = employees.find(e => e.id === id);
+
+                // Storage.getEmployees() is already scoped for TLs, so if we find them, they are in our team.
+                if (!empToDelete) {
+                    this.showNotification('Permission Denied: You can only delete members of your own team.', 'error');
+                    return;
+                }
+            } else if (!isAdmin) {
+                this.showNotification('Permission Denied: Only Admins and Team Leaders can delete employees.', 'error');
+                return;
+            }
+
             await Storage.deleteEmployee(id);
             this.showNotification(`Employee ${name} deleted successfully`);
             this.renderTeamPage();
+            this.renderEmployeesPage(); // Sync with new Employees module
         } catch (error) {
             console.error('Error deleting employee:', error);
             this.showNotification('Failed to delete employee: ' + error.message, 'error');
@@ -1776,7 +2382,7 @@ const NewApp = {
         try {
             await Storage.deleteClient(id);
             this.showNotification(`Client ${name} deleted successfully`);
-            this.renderTeamPage();
+            this.renderClientsPage();
         } catch (error) {
             console.error('Error deleting client:', error);
             this.showNotification('Failed to delete client: ' + error.message, 'error');
@@ -1835,7 +2441,7 @@ const NewApp = {
             position: fixed;
             top: 2rem;
             right: 2rem;
-            background: var(--accent-blue);
+            background: #3B82F6;
             color: white;
             padding: 1rem 1.5rem;
             border-radius: 8px;
@@ -1861,7 +2467,6 @@ const NewApp = {
         const isPassword = input.getAttribute('type') === 'password';
         input.setAttribute('type', isPassword ? 'text' : 'password');
 
-        // Toggle SVG icon
         if (isPassword) {
             toggleEl.innerHTML = `
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -1881,27 +2486,15 @@ const NewApp = {
 // Add notification animations
 const style = document.createElement('style');
 style.textContent = `
-    @keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    @keyframes slideOut {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-    }
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
 `;
 document.head.appendChild(style);
 

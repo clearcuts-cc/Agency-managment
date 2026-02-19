@@ -17,15 +17,26 @@ const Storage = {
 
     // ===== Client Operations =====
     async getClients() {
+        let clients = [];
         if (this.isSupabaseActive()) {
             try {
-                return await SupabaseService.getClients();
+                clients = await SupabaseService.getClients();
             } catch (e) {
                 console.error('Supabase Error:', e);
-                return [];
+                clients = [];
             }
+        } else {
+            clients = this.getLocal(this.KEYS.CLIENTS) || [];
         }
-        return this.getLocal(this.KEYS.CLIENTS) || [];
+
+        // Team Leader Scoping
+        if (Auth.currentUser && (Auth.currentUser.role === 'Team Leader' || Auth.currentUser.role === 'TL')) {
+            const tasks = await this.getTasks(); // This is already scoped for TLs
+            const clientIdsWithTeamTasks = new Set(tasks.map(t => t.client_id || t.clientId));
+            return clients.filter(c => clientIdsWithTeamTasks.has(c.id));
+        }
+
+        return clients;
     },
 
     // === User/Employee Operations ===
@@ -47,9 +58,16 @@ const Storage = {
 
         // Filter for Employees and Managers (Excluding Admins from the basic list as requested)
         return allUsers.filter(u => {
+            // Team Leader Scoping
+            if (Auth.currentUser && (Auth.currentUser.role === 'Team Leader' || Auth.currentUser.role === 'TL')) {
+                // If TL has no team, they see nothing or everything? Plan says "Show only members where member.team === tl.team"
+                if (!Auth.currentUser.team) return false; // Strict scoping
+                if (u.team !== Auth.currentUser.team) return false;
+            }
+
             // Default to 'employee' if role is missing (e.g. Supabase Schema issue)
             const r = (u.role || 'employee').toLowerCase();
-            return r === 'employee' || r === 'manager';
+            return r === 'employee' || r === 'manager' || r === 'team leader' || r === 'tl';
         });
     },
 
@@ -147,15 +165,44 @@ const Storage = {
 
     // ===== Task Operations =====
     async getTasks() {
+        let tasks = [];
         if (this.isSupabaseActive()) {
             try {
-                return await SupabaseService.getTasks();
+                tasks = await SupabaseService.getTasks();
             } catch (e) {
                 console.error('Supabase Error:', e);
-                return [];
+                tasks = [];
             }
+        } else {
+            tasks = this.getLocal(this.KEYS.TASKS) || [];
         }
-        return this.getLocal(this.KEYS.TASKS) || [];
+
+        // Team Leader Scoping
+        if (Auth.currentUser && (Auth.currentUser.role === 'Team Leader' || Auth.currentUser.role === 'TL')) {
+            if (!Auth.currentUser.team) return []; // Strict scoping
+
+            // Get team members (including self if in team)
+            const teamMembers = await this.getEmployees();
+            const teamMemberIds = teamMembers.map(u => u.id);
+
+            // Also include tasks created by TL? (Optional, plan says "manage their own team's data")
+            // Usually TL should see tasks assigned to team members.
+            // And maybe tasks they created?
+            // Let's stick to "assigned to team members". 
+            // If TL assigns a task to someone outside, they lose visibility?
+            // "Scoping: Restrict Team Leaders' access to only their team's data (employees, tasks, etc.)."
+            // So if checks "assigned to team member", then yes.
+
+            return tasks.filter(t => {
+                // Task matches if assignee is in team ID list
+                // OR if assignee is missing (unassigned) and TL created it? (Maybe)
+                // Let's stick to assignee match.
+                // Note: t.assigneeId might be string or number. IDs are usually strings here.
+                return teamMemberIds.includes(t.assigneeId) || teamMemberIds.includes(t.assignee_id);
+            });
+        }
+
+        return tasks;
     },
 
     async addTask(task) {
@@ -274,6 +321,49 @@ const Storage = {
             return false;
         }
     },
+
+    generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    },
+
+    // ===== TEAM CRUD OPERATIONS =====
+    // Storing teams locally as metadata since Supabase table might not exist
+    async getTeams() {
+        // 1. Try Supabase (if table exists - optional future proofing)
+        // For now, use LocalStorage 'clearcut_teams'
+        return this.getLocal('clearcut_teams') || [];
+    },
+
+    async addTeam(name, description) {
+        const teams = await this.getTeams();
+        const newTeam = {
+            id: this.generateId(),
+            name,
+            description,
+            createdAt: new Date().toISOString()
+        };
+        teams.push(newTeam);
+        this.setLocal('clearcut_teams', teams);
+        return newTeam;
+    },
+
+    async deleteTeam(id) {
+        const teams = await this.getTeams();
+        const filtered = teams.filter(t => t.id !== id);
+        this.setLocal('clearcut_teams', filtered);
+        return true;
+    },
+
+    async getTeamById(id) {
+        const teams = await this.getTeams();
+        return teams.find(t => t.id === id) || null;
+    },
+
+    // Aliases for Group nomenclature
+    async getGroups() { return this.getTeams(); },
+    async addGroup(name, description) { return this.addTeam(name, description); },
+    async deleteGroup(id) { return this.deleteTeam(id); },
+    async getGroupById(id) { return this.getTeamById(id); },
 
     async addProjectToClient(clientId, projectName) {
         if (this.isSupabaseActive()) return; // Not implemented on backend automatic triggers yet

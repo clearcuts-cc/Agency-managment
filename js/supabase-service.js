@@ -51,7 +51,14 @@ window.SupabaseService = {
     },
 
     // Special method to create an employee WITHOUT logging out the current admin
-    async createEmployee(email, password, name) {
+    async createEmployee(email, password, name, team) {
+        // LAN IP Warning for Mobile Links
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.warn('⚠️ MOBILE LINK WARNING: You are creating an invite from localhost. The email link will point to 127.0.0.1 and FAIL on mobile devices. To fix this, access the app via your PC\'s LAN IP (e.g., 192.168.1.5) before creating the employee.');
+            alert('⚠️ Important: You are on localhost. Email links generated now will NOT work on mobile.\n\nPlease access the app using your PC\'s LAN IP (check ipconfig) to generate mobile-friendly links.');
+        }
+
+
         const createClientFn = window.supabaseCreateClient ||
             (typeof createClient !== 'undefined' ? createClient : null) ||
             (window.supabase && window.supabase.createClient);
@@ -69,7 +76,7 @@ window.SupabaseService = {
             email,
             password,
             options: {
-                data: { full_name: name, role: 'Employee' },
+                data: { full_name: name, role: 'Employee', team: team },
                 emailRedirectTo: this._getSignupRedirectUrl()
             }
         });
@@ -84,7 +91,8 @@ window.SupabaseService = {
                     id: data.user.id,
                     email: email,
                     name: name,
-                    role: 'Employee'
+                    role: 'Employee',
+                    team: team
                 }]);
             if (insertError) console.warn('Error inserting to public users table:', insertError);
         }
@@ -174,7 +182,8 @@ window.SupabaseService = {
             email: user.email,
             name: user.name || user.full_name,
             avatar: user.avatar,
-            role: user.role || 'Employee'
+            role: user.role || 'Employee',
+            team: user.team // Add team field
         };
 
         const { data, error } = await window.supabase

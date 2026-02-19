@@ -3,6 +3,7 @@
 const NotificationService = {
     currentFilter: 'all',
     _dismissedSmartKey: 'clearcut_dismissed_smart_notifications',
+    _lastDailyDigestKey: 'clearcut_last_daily_digest_date',
     lastNotificationId: null, // Track the last seen notification ID to prevent duplicates
 
     async getNotifications() {
@@ -116,25 +117,28 @@ const NotificationService = {
             const notifications = await this.getNotifications();
             const unreadDbCount = notifications.filter(n => !n.is_read).length;
 
+            if (notifications.length > 0) {
+                this.lastNotificationId = notifications[0].id;
+            }
+
             // Include smart notifications in the count
-            // These are always "unread" until dismissed or resolved
             const smartNotifications = await this.generateSmartNotifications();
             const smartCount = smartNotifications.length;
 
             const totalUnread = unreadDbCount + smartCount;
 
-            // Update sidebar navigation badge
+            // Update sidebar navigation badge (Red Dot)
             const navBadge = document.getElementById('notifications-nav-badge');
             if (navBadge) {
-                navBadge.textContent = totalUnread;
+                navBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
                 navBadge.style.display = totalUnread > 0 ? 'inline-block' : 'none';
             }
 
-            // Update footer notification count
-            const footerBadge = document.getElementById('notification-count');
-            if (footerBadge) {
-                footerBadge.textContent = totalUnread;
-                footerBadge.style.display = totalUnread > 0 ? 'inline-block' : 'none';
+            // Update footer or other badges if they exist
+            const otherBadge = document.getElementById('notification-count');
+            if (otherBadge) {
+                otherBadge.textContent = totalUnread;
+                otherBadge.style.display = totalUnread > 0 ? 'inline-block' : 'none';
             }
         } catch (error) {
             console.error('Error updating badge count:', error);
@@ -223,49 +227,51 @@ const NotificationService = {
         const notifications = [];
 
         tasks.forEach(task => {
-            if (task.status === 'Done') return;
-
             const deadline = task.deadline ? new Date(task.deadline) : null;
-            if (!deadline) return;
-            deadline.setHours(0, 0, 0, 0);
+            if (deadline) deadline.setHours(0, 0, 0, 0);
+            const deadlineStr = deadline ? deadline.toISOString().split('T')[0] : null;
 
-            const deadlineStr = deadline.toISOString().split('T')[0];
-
-            // Overdue tasks
-            if (deadline < today) {
-                const smartId = `overdue_${task.id}_${todayStr}`;
-                if (!dismissed.includes(smartId)) {
-                    const daysOverdue = Math.ceil((today - deadline) / 86400000);
-                    notifications.push({
-                        id: smartId,
-                        message: `⚠️ "${task.title}" is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue (deadline: ${deadlineStr})`,
-                        type: 'overdue',
-                        severity: 'danger',
-                        taskId: task.id,
-                        created_at: new Date().toISOString()
-                    });
+            if (deadline) {
+                // Overdue tasks
+                if (deadline < today) {
+                    const smartId = `overdue_${task.id}_${todayStr}`;
+                    if (!dismissed.includes(smartId)) {
+                        const daysOverdue = Math.ceil((today - deadline) / 86400000);
+                        notifications.push({
+                            id: smartId,
+                            message: `⚠️ "${task.title}" is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue (deadline: ${deadlineStr})`,
+                            type: 'overdue',
+                            severity: 'danger',
+                            taskId: task.id,
+                            created_at: new Date().toISOString()
+                        });
+                    }
                 }
-            }
 
-            // Due today
-            if (deadlineStr === todayStr) {
-                const smartId = `due_today_${task.id}_${todayStr}`;
-                if (!dismissed.includes(smartId)) {
-                    notifications.push({
-                        id: smartId,
-                        message: `📅 "${task.title}" is due today! Status: ${task.status}`,
-                        type: 'due_today',
-                        severity: 'warning',
-                        taskId: task.id,
-                        created_at: new Date().toISOString()
-                    });
+                // Due today
+                if (deadlineStr === todayStr) {
+                    const smartId = `due_today_${task.id}_${todayStr}`;
+                    if (!dismissed.includes(smartId)) {
+                        notifications.push({
+                            id: smartId,
+                            message: `📅 "${task.title}" is due today! Status: ${task.status}`,
+                            type: 'due_today',
+                            severity: 'warning',
+                            taskId: task.id,
+                            created_at: new Date().toISOString()
+                        });
+                    }
                 }
             }
 
             // Pending from yesterday (still not done)
             if (task.status === 'Pending') {
                 const smartId = `pending_reminder_${task.id}_${todayStr}`;
-                if (!dismissed.includes(smartId)) {
+                // Only show if created before today to avoid redundant "New Task" + "Pending"
+                const createdDate = new Date(task.createdAt || task.created_at);
+                createdDate.setHours(0, 0, 0, 0);
+
+                if (createdDate < today && !dismissed.includes(smartId)) {
                     notifications.push({
                         id: smartId,
                         message: `🔔 "${task.title}" is still pending. Consider starting this task.`,
@@ -277,6 +283,56 @@ const NotificationService = {
                 }
             }
         });
+
+        // ===== DAILY DIGEST =====
+        // Check if we have already shown the digest today
+        // Logic: specific key in localStorage based on Date
+        const lastDigestDate = localStorage.getItem(this._lastDailyDigestKey);
+
+        // Only trigger if we haven't seen it today AND we have dismissed list loaded (implied)
+        if (lastDigestDate !== todayStr) {
+            // Calculate pending work
+            let pendingCount = 0;
+            let overdueCount = 0;
+            let dueTodayCount = 0;
+
+            tasks.forEach(t => {
+                if (t.status === 'Done') return;
+                pendingCount++;
+
+                if (t.deadline) {
+                    const d = new Date(t.deadline);
+                    d.setHours(0, 0, 0, 0);
+                    if (d < today) overdueCount++;
+                    if (d.getTime() === today.getTime()) dueTodayCount++;
+                }
+            });
+
+            if (pendingCount > 0) {
+                const digestId = `daily_digest_${todayStr}`;
+
+                // If the user hasn't dismissed this specific digest yet
+                if (!dismissed.includes(digestId)) {
+                    notifications.unshift({ // Add to top
+                        id: digestId,
+                        message: `☀️ Good Morning! You have ${pendingCount} pending task${pendingCount > 1 ? 's' : ''} (${overdueCount} overdue, ${dueTodayCount} due today).`,
+                        type: 'daily_digest', // smart type
+                        severity: 'info', // styling
+                        created_at: new Date().toISOString()
+                        // No taskId, so click will just open tasks view (default behavior)
+                    });
+
+                    // We DO NOT set the localStorage key here, because we want it to regenerate 
+                    // and stay in the list until the user DISMISSES it.
+                    // The `dismissSmartNotification` function adds the ID to the dismissed list,
+                    // effectively hiding it.
+                    // The `lastDigestDate` might be used if we wanted to push a *native* notification or similar,
+                    // but for this internal list, reliance on `dismissed` array is enough.
+                    // Actually, let's set the key so we don't re-calculate/re-push if we moved to a push system later.
+                    // But for now, simple is better.
+                }
+            }
+        }
 
         return notifications;
     },
@@ -322,7 +378,20 @@ const NotificationService = {
             gap: var(--spacing-md);
             align-items: flex-start;
             transition: var(--transition);
+            cursor: pointer; /* Interaction hint */
+            position: relative;
         `;
+
+        // Click Handler for Navigation
+        card.addEventListener('click', (e) => {
+            // Ignore if clicking action buttons (dismiss)
+            if (e.target.closest('button')) return;
+
+            // Call App handler
+            if (typeof NewApp !== 'undefined' && NewApp.handleNotificationClick) {
+                NewApp.handleNotificationClick(notification);
+            }
+        });
 
         // Smart badge
         const badge = document.createElement('div');
@@ -376,38 +445,56 @@ const NotificationService = {
         return card;
     },
 
-    startPolling(callback) {
+    async startPolling(callback) {
         if (this.pollingInterval) clearInterval(this.pollingInterval);
 
         // Initial fetch
         this.getNotifications().then(notifications => {
             if (notifications.length > 0) {
-                // Sort by created_at desc to get the newest first, or trust ID is sequential? 
-                // Supabase IDs are UUIDs usually? No, the code says `order('created_at', { ascending: false })`.
-                // So notifications[0] is the newest.
                 this.lastNotificationId = notifications[0].id;
             }
-            callback(notifications);
+            callback(notifications); // Updates badge/toast on load if needed, or maybe just silent update?
+            // Actually usually we don't toast on initial load, but app.js handleNewNotifications does. 
+            // We might want to suppress toast on first load? 
+            // For now, adhering to existing logic but adding Realtime.
         });
 
-        // Poll every 30 seconds
-        this.pollingInterval = setInterval(async () => {
-            const notifications = await this.getNotifications();
-            if (notifications.length > 0) {
-                const newest = notifications[0];
-                // Only trigger callback if we have a NEW notification
-                if (newest.id !== this.lastNotificationId) {
-                    this.playNotificationSound();
-                    this.lastNotificationId = newest.id;
-                    callback(notifications);
-                }
-                // If ids match, we don't spam the callback/toast, but we might want to update the list quietly? 
-                // The prompt says "spam", implying repetitive toasts. 
-                // If we don't call callback, the UI list won't update read status if changed elsewhere?
-                // For now, let's assume the main annoyance is the "New Notification" popup which usually triggers on callback.
-                // However, the callback likely renders the whole list.
+        // Realtime Subscription
+        if (Storage.isSupabaseActive()) {
+            const currentUser = Auth.getCurrentUser();
+            if (currentUser) {
+                console.log('Subscribing to Realtime Notifications for:', currentUser.id);
+                window.supabase
+                    .channel('public:notifications')
+                    .on('postgres_changes', {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'notifications',
+                        filter: `user_id=eq.${currentUser.id}`
+                    }, payload => {
+                        console.log('Realtime Notification Received:', payload);
+                        const newNotification = payload.new;
+
+                        // Play sound
+                        this.playNotificationSound();
+
+                        // Update UI
+                        this.updateBadgeCount();
+                        this.renderNotificationsPage(); // Refresh list if open
+
+                        // Trigger App Callback (Toast)
+                        callback([newNotification]);
+                    })
+                    .subscribe((status) => {
+                        console.log('Notification Subscription Status:', status);
+                    });
             }
-        }, 10000);
+        }
+
+        // Keep Polling as Fallback (every 30s)
+        this.pollingInterval = setInterval(async () => {
+            await this.updateBadgeCount();
+        }, 30000);
     },
 
     playNotificationSound() {
@@ -454,6 +541,8 @@ const NotificationService = {
     createNotificationCard(notification) {
         const card = document.createElement('div');
         card.className = `notification-card ${notification.is_read ? 'read' : 'unread'}`;
+
+        // Add robust styles and pointer
         card.style.cssText = `
             background: ${notification.is_read ? 'var(--bg-secondary)' : 'var(--bg-card)'};
             border: 1px solid ${notification.is_read ? 'var(--border-color)' : 'var(--accent-blue)'};
@@ -465,7 +554,20 @@ const NotificationService = {
             align-items: flex-start;
             transition: var(--transition);
             opacity: ${notification.is_read ? '0.7' : '1'};
+            cursor: pointer; /* Interaction hint */
+            position: relative;
         `;
+
+        // Click Handler for Navigation
+        card.addEventListener('click', (e) => {
+            // Ignore if clicking action buttons
+            if (e.target.closest('button')) return;
+
+            // Call App handler
+            if (typeof NewApp !== 'undefined' && NewApp.handleNotificationClick) {
+                NewApp.handleNotificationClick(notification);
+            }
+        });
 
         // Notification icon
         const icon = document.createElement('div');
