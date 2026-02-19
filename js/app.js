@@ -4,18 +4,44 @@ const NewApp = {
     currentPage: 'calendar',
 
     async init() {
-        console.log('Initializing Application...');
+        console.log('Initializing NewApp...');
 
-        // Check for active session
-        if (!Auth.checkAuth()) return;
+        this.initMobileMenu(); // Mobile support
 
-        // Initialize User & Sidebar
+        // --- SUPABASE SESSION SYNC & RECOVERY ---
+        if (window.supabase) {
+            // 1. Recover Session from URL (e.g. magic link / reset password)
+            const { data: { session } } = await window.supabase.auth.getSession();
+
+            // 2. Sync to LocalStorage if we have a valid session but no local user
+            if (session && session.user && !Auth.getCurrentUser()) {
+                console.log('Syncing Supabase session to local storage...');
+                const user = session.user;
+                const appUser = {
+                    id: user.id,
+                    email: user.email,
+                    name: user.user_metadata.full_name || user.email.split('@')[0],
+                    avatar: Auth.getInitials(user.user_metadata.full_name || user.email),
+                    role: user.user_metadata.role || 'Employee',
+                    joined: user.created_at || new Date().toISOString()
+                };
+                // Save and set current user so checkAuth passes
+                localStorage.setItem('contentflow_current_user', JSON.stringify(appUser));
+                Auth.currentUser = appUser;
+            }
+
+
+        }
+        // ----------------------------------------
+
+        // Check Auth
+        if (typeof Auth !== 'undefined' && !Auth.checkAuth()) return;
         this.updateUserDisplay();
         this.checkRoleAccess();
 
         // Initialize Modules
         if (typeof NotificationService !== 'undefined') {
-            // Poll for notifications every 30s
+            // Poll for notifications every 10s (updated)
             NotificationService.startPolling(this.handleNewNotifications.bind(this));
             await this.updateNotificationBadge();
         }
@@ -60,6 +86,7 @@ const NewApp = {
         console.log('Checking Role Access for:', user.name, 'Resolved Role:', role);
 
         const isAdmin = role.toLowerCase() === 'admin';
+        const isTeamLeader = role.toLowerCase() === 'team leader' || role.toLowerCase() === 'tl';
 
         // Selectors
         const adminSection = document.getElementById('admin-menu-section');
@@ -68,8 +95,8 @@ const NewApp = {
         const employeeDashboard = document.getElementById('my-dashboard-nav');
         const createBtn = document.getElementById('create-task-btn');
 
-        if (isAdmin) {
-            // Admin sees EVERYTHING
+        if (isAdmin || isTeamLeader) {
+            // Admin & TL see Management sections
             if (adminSection) adminSection.style.display = 'block';
             if (analyticsNav) analyticsNav.style.display = 'flex';
             if (settingsNav) settingsNav.style.display = 'flex';
@@ -133,11 +160,11 @@ const NewApp = {
                 list.innerHTML = '<p style="color:var(--text-secondary); font-size:0.8rem; text-align:center;">No new notifications</p>';
             } else {
                 list.innerHTML = notifications.map(n => `
-                    <div style="padding: 10px; border-bottom: 1px solid var(--border-color); ${!n.is_read ? 'background: rgba(79, 70, 229, 0.1);' : ''}">
+    < div style = "padding: 10px; border-bottom: 1px solid var(--border-color); ${!n.is_read ? 'background: rgba(79, 70, 229, 0.1);' : ''}" >
                         <p style="font-size: 0.9rem; margin-bottom: 4px;">${n.message}</p>
                         <span style="font-size: 0.7rem; color: var(--text-secondary);">${new Date(n.created_at).toLocaleString()}</span>
-                    </div>
-                 `).join('');
+                    </div >
+    `).join('');
             }
         }
     },
@@ -203,28 +230,55 @@ const NewApp = {
     },
 
 
-    // ===== Settings & Profile =====
+    // ===== Settings & Preferences =====
     attachSettingsListeners() {
-        const settingsBtn = document.getElementById('settings-btn');
-        if (settingsBtn) {
-            settingsBtn.addEventListener('click', () => {
-                this.handleNavigation('settings'); // Changed from navigateToPage
-                this.loadSettings();
+        // Toggle Dark/Light Mode
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.checked = document.body.classList.contains('light-mode');
+            themeToggle.addEventListener('change', () => {
+                document.body.classList.toggle('light-mode');
+                const isLight = document.body.classList.contains('light-mode');
+                localStorage.setItem('clearcut_theme', isLight ? 'light' : 'dark');
             });
         }
 
-        const profileForm = document.getElementById('profile-form');
-        if (profileForm) {
-            profileForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.saveProfile();
+        // Test Notification Button
+        const testNotifBtn = document.getElementById('test-notification-btn');
+        if (testNotifBtn) {
+            testNotifBtn.addEventListener('click', () => {
+                if (typeof NotificationService !== 'undefined') {
+                    NotificationService.playNotificationSound();
+                    this.showNotification('This is a test notification with sound!');
+                } else {
+                    this.showNotification('Notification Service not ready', 'error');
+                }
             });
         }
 
-        const testBtn = document.getElementById('test-notification-btn');
-        if (testBtn) {
-            testBtn.addEventListener('click', () => {
-                if (window.notifications) Notifications.show('This is a test notification!', 'info');
+        // Auto Refresh
+        const autoRefreshToggle = document.getElementById('setting-auto-refresh');
+        if (autoRefreshToggle) {
+            autoRefreshToggle.addEventListener('change', (e) => {
+                const enabled = e.target.checked;
+                // Save preference logic if needed
+                // Currently notifications.js starts polling by default in init()
+                // We could stop/start polling here if we wanted deeper integration
+            });
+        }
+
+        // Default Page Setting
+        const defaultPageSelect = document.getElementById('setting-default-page');
+        if (defaultPageSelect) {
+            // Load saved
+            const saved = JSON.parse(localStorage.getItem('clearcut_advanced_settings') || '{}');
+            if (saved.defaultPage) defaultPageSelect.value = saved.defaultPage;
+
+            defaultPageSelect.addEventListener('change', (e) => {
+                const settings = JSON.parse(localStorage.getItem('clearcut_advanced_settings') || '{}');
+                settings.defaultPage = e.target.value;
+                localStorage.setItem('clearcut_advanced_settings', JSON.stringify(settings));
+                this.showNotification('Default start page saved');
             });
         }
     },
@@ -724,6 +778,7 @@ const NewApp = {
             });
         }
 
+
         // Filter buttons
         const filterChips = document.querySelectorAll('.filter-chip');
         filterChips.forEach(chip => {
@@ -868,6 +923,7 @@ const NewApp = {
             }
         }
 
+
         // Notify if assignee changed
         if (updates.assignee_id && updates.assignee_id !== previousAssigneeId && currentUser && updates.assignee_id !== currentUser.id) {
             try {
@@ -892,11 +948,17 @@ const NewApp = {
     },
 
     async deleteCurrentTask() {
+        const currentUser = Auth.getCurrentUser();
+        if (!currentUser || (currentUser.role !== 'Admin' && (!currentUser.user_metadata || currentUser.user_metadata.role !== 'Admin'))) {
+            this.showNotification('Permission Denied: Only Admins can delete projects.', 'error');
+            return;
+        }
+
         const taskId = document.getElementById('edit-task-id').value;
         if (!taskId) return;
 
         const title = document.getElementById('edit-task-title').value || 'this task';
-        if (!confirm(`Are you sure you want to delete "${title}"? This action cannot be undone.`)) {
+        if (!confirm(`Are you sure you want to delete "${title}" ? This action cannot be undone.`)) {
             return;
         }
 
@@ -923,14 +985,13 @@ const NewApp = {
 
     async handleClientSubmit() {
         const name = document.getElementById('client-name').value;
-        const email = document.getElementById('client-email').value;
         const phone = document.getElementById('client-phone').value;
         const address = document.getElementById('client-address').value;
 
         try {
             await Storage.addClient({
                 name,
-                email,
+                email: '', // Optional/Removed
                 phone,
                 address,
                 status: 'Approved'
@@ -1235,7 +1296,7 @@ const NewApp = {
                              ` : ''}
                         </div>
                     </div>
-                `;
+    `;
                 }).join('');
             }
         }
@@ -1272,7 +1333,7 @@ const NewApp = {
                              ` : ''}
                         </div>
                     </div>
-                 `).join('');
+    `).join('');
             }
         }
     },
@@ -1303,8 +1364,9 @@ const NewApp = {
         // User scoping
         const currentUser = Auth.getCurrentUser();
         const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+        const isTeamLeader = currentUser && (currentUser.role === 'Team Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Team Leader'));
 
-        if (!isAdmin && currentUser) {
+        if (!isAdmin && !isTeamLeader && currentUser) {
             // Filter tasks to only those assigned to current user
             allTasks = allTasks.filter(t => (t.assignee_id || t.assigneeId) === currentUser.id);
 
@@ -1354,7 +1416,7 @@ const NewApp = {
             const safeId = this.escapeHtml(client.id);
 
             return `
-            <div class="stat-card project-card" onclick="NewApp.openProjectDetail('${safeId}')" style="cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color);">
+                <div class="stat-card project-card" onclick="NewApp.openProjectDetail('${safeId}')" style="cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color);">
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
                     <div>
                         <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;">${safeName}</h3>
@@ -1365,14 +1427,14 @@ const NewApp = {
                     </div>
                 </div>
 
-                <!-- Stats removed as per user request -->
+                <!--Stats removed as per user request-- >
                 <div style="margin-bottom: 1rem;"></div>
 
                 <div class="progress-bar" style="height: 6px;">
                     <div class="progress-fill" style="width: ${progress}%;"></div>
                 </div>
             </div>
-            `;
+    `;
         }).join('');
     },
 
@@ -1426,14 +1488,14 @@ const NewApp = {
                     <div class="stat-value" style="font-size: 1.5rem;">${count}</div>
                     <div class="stat-label">${label}</div>
                 </div>
-            `;
+    `;
 
             statsRow.innerHTML = `
                 ${createCard('Total Tasks', clientTasks.length, '')}
                 ${createCard('Pending', pending, 'pending')}
                 ${createCard('In Progress', inProgress, 'in-progress')}
                 ${createCard('Completed', done, 'done')}
-            `;
+`;
         }
 
         // Render Task List
@@ -1595,8 +1657,8 @@ const NewApp = {
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z"></path>
                     </svg>
                 </div>
-            </div>
-        `;
+            </div >
+    `;
 
         const editBtn = card.querySelector('.action-btn.edit');
         if (editBtn) {
@@ -1696,7 +1758,7 @@ const NewApp = {
     },
 
     async deleteEmployee(id, name) {
-        if (!confirm(`Are you sure you want to delete employee "${name}"? This action cannot be undone.`)) return;
+        if (!confirm(`Are you sure you want to delete employee "${name}" ? This action cannot be undone.`)) return;
 
         try {
             await Storage.deleteEmployee(id);
@@ -1709,7 +1771,7 @@ const NewApp = {
     },
 
     async deleteClient(id, name) {
-        if (!confirm(`Are you sure you want to delete client "${name}"? This action cannot be undone.`)) return;
+        if (!confirm(`Are you sure you want to delete client "${name}" ? This action cannot be undone.`)) return;
 
         try {
             await Storage.deleteClient(id);
@@ -1723,6 +1785,35 @@ const NewApp = {
 
     filterTasks(filter) {
         this.renderTasks(filter);
+    },
+
+    initMobileMenu() {
+        const mobileBtn = document.getElementById('mobile-menu-btn');
+        const sidebar = document.querySelector('.sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        const navItems = document.querySelectorAll('.nav-item');
+
+        if (mobileBtn && sidebar && overlay) {
+            mobileBtn.addEventListener('click', () => {
+                sidebar.classList.add('mobile-open');
+                overlay.style.display = 'block';
+            });
+
+            overlay.addEventListener('click', () => {
+                sidebar.classList.remove('mobile-open');
+                overlay.style.display = 'none';
+            });
+
+            // Close sidebar when a nav item is clicked
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    if (window.innerWidth <= 768) {
+                        sidebar.classList.remove('mobile-open');
+                        overlay.style.display = 'none';
+                    }
+                });
+            });
+        }
     },
 
     // ===== Utility Functions =====

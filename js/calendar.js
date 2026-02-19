@@ -292,6 +292,16 @@ const NewCalendar = {
             document.getElementById('edit-task-due-date').value = `${dDate.getFullYear()}-${String(dDate.getMonth() + 1).padStart(2, '0')}-${String(dDate.getDate()).padStart(2, '0')}`;
         }
 
+        // Hide/Show Delete Button based on Role
+        const deleteBtn = document.getElementById('delete-task-btn');
+        if (deleteBtn) {
+            const currentUser = typeof Auth !== 'undefined' ? Auth.getCurrentUser() : null;
+            const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
+
+            // Check if user is Admin or if the element has admin-only class logic, but explicit check is safer
+            deleteBtn.style.display = isAdmin ? 'block' : 'none';
+        }
+
         if (modal) {
             modal.classList.add('active');
             // Populate dropdowns and pre-select current values

@@ -3,6 +3,7 @@
 const NotificationService = {
     currentFilter: 'all',
     _dismissedSmartKey: 'clearcut_dismissed_smart_notifications',
+    lastNotificationId: null, // Track the last seen notification ID to prevent duplicates
 
     async getNotifications() {
         if (!Storage.isSupabaseActive()) return [];
@@ -373,6 +374,55 @@ const NotificationService = {
         card.appendChild(dismissBtn);
 
         return card;
+    },
+
+    startPolling(callback) {
+        if (this.pollingInterval) clearInterval(this.pollingInterval);
+
+        // Initial fetch
+        this.getNotifications().then(notifications => {
+            if (notifications.length > 0) {
+                // Sort by created_at desc to get the newest first, or trust ID is sequential? 
+                // Supabase IDs are UUIDs usually? No, the code says `order('created_at', { ascending: false })`.
+                // So notifications[0] is the newest.
+                this.lastNotificationId = notifications[0].id;
+            }
+            callback(notifications);
+        });
+
+        // Poll every 30 seconds
+        this.pollingInterval = setInterval(async () => {
+            const notifications = await this.getNotifications();
+            if (notifications.length > 0) {
+                const newest = notifications[0];
+                // Only trigger callback if we have a NEW notification
+                if (newest.id !== this.lastNotificationId) {
+                    this.playNotificationSound();
+                    this.lastNotificationId = newest.id;
+                    callback(notifications);
+                }
+                // If ids match, we don't spam the callback/toast, but we might want to update the list quietly? 
+                // The prompt says "spam", implying repetitive toasts. 
+                // If we don't call callback, the UI list won't update read status if changed elsewhere?
+                // For now, let's assume the main annoyance is the "New Notification" popup which usually triggers on callback.
+                // However, the callback likely renders the whole list.
+            }
+        }, 10000);
+    },
+
+    playNotificationSound() {
+        // Simple beep using AudioContext or a data URI to avoid external dependencies blocking
+        // A simple pleasant "ding"
+        const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"); // Short double click sound or similar
+        // Fallback or use a Base64 if preferred to be offline capable, but URL is easier for now. 
+        // Let's use a very short base64 beep to be safe and "offline" friendly/fast.
+        // Actually, the user asked for "test notification sound" to work, so I should implement a standard sound.
+        // I will use a simple hosted sound or a generated one.
+
+        // Using a reliable short notification sound URL
+        audio.src = 'https://cdn.freesound.org/previews/253/253174_4404140-lq.mp3'; // Example beep
+        audio.volume = 0.5;
+        audio.play().catch(e => console.log('Audio play failed (user interaction needed first):', e));
     },
 
     async clearAllNotifications() {
