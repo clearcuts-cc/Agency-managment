@@ -4,6 +4,62 @@ class Auth {
         // Support legacy user object
         const legacyUser = JSON.parse(localStorage.getItem('contentflow_current_user'));
         if (legacyUser) this.currentUser = legacyUser;
+
+        // Global Supabase Auth Listener for Auto-Login (Invites/Confirmations)
+        if (typeof supabase !== 'undefined' && supabase) {
+            supabase.auth.onAuthStateChange(async (event, session) => {
+                if (event === 'SIGNED_IN' && session) {
+                    const user = session.user;
+                    console.log('Global Auth Event:', event, user.email);
+
+                    // 1. Check if we already have this user logged in locally
+                    const currentLocal = this.getCurrentUser();
+                    if (currentLocal && currentLocal.email === user.email) {
+                        return; // Already synced
+                    }
+
+                    // 2. Sync Supabase Session to Local Storage
+                    // We need to fetch the full profile if possible, or construct it
+                    // Try to get from public users table first to get 'team', 'role' etc.
+                    let appUser = {
+                        id: user.id,
+                        email: user.email,
+                        name: user.user_metadata.full_name || user.email.split('@')[0],
+                        avatar: this.getInitials(user.user_metadata.full_name || user.email),
+                        role: user.user_metadata.role || 'Employee',
+                        team: user.user_metadata.team || null
+                    };
+
+                    // Try to fetch latest from DB to be sure
+                    try {
+                        const { data: dbUser } = await supabase.from('users').select('*').eq('id', user.id).single();
+                        if (dbUser) {
+                            appUser = { ...appUser, ...dbUser }; // DB takes precedence
+                        }
+                    } catch (e) {
+                        console.warn('Could not fetch public profile, using metadata', e);
+                    }
+
+                    this.currentUser = appUser;
+                    localStorage.setItem('contentflow_current_user', JSON.stringify(appUser));
+
+                    // 3. Update UI
+                    // If we are on index.html, a reload ensures everything renders with the new user
+                    if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+                        // Clear hash to look clean
+                        history.replaceState(null, null, 'index.html');
+                        window.location.reload();
+                    } else if (window.location.pathname.endsWith('login.html')) {
+                        window.location.href = 'index.html';
+                    }
+                } else if (event === 'SIGNED_OUT') {
+                    // Handle global signapiout
+                    if (this.currentUser) {
+                        this.logout();
+                    }
+                }
+            });
+        }
     }
 
     static async signup(name, email, password) {

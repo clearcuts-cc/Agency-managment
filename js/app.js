@@ -2167,24 +2167,7 @@ const NewApp = {
         return card;
     },
 
-    async deleteEmployee(id, name) {
-        if (!confirm(`Are you sure you want to delete employee "${name}"? This action cannot be undone.`)) return;
 
-        try {
-            await Storage.deleteEmployee(id);
-            this.showNotification(`Employee "${name}" deleted successfully`, 'success');
-            // Refresh the employee list
-            if (document.getElementById('employees-grid')) {
-                this.renderEmployeesPage();
-            } else {
-                // If on group page or other, maybe refresh that too?
-                // For now, simple refresh is sufficient.
-            }
-        } catch (error) {
-            console.error('Error deleting employee:', error);
-            this.showNotification('Failed to delete employee: ' + error.message, 'error');
-        }
-    },
 
     async openEditEmployeeModal(empId) {
         try {
@@ -2353,8 +2336,9 @@ Best regards,
             this.showNotification(`Email sent to ${email}. Promoted to Team Leader!`, 'success');
 
             // 3. Refresh UI
-            this.renderTeamPage();
-            this.renderEmployeesPage(); // Sync with new Employees module
+            // 3. Refresh UI
+            this.renderEmployeesPage();
+
         } catch (error) {
             console.error('Promotion failed:', error);
             this.showNotification('Failed to promote user: ' + error.message, 'error');
@@ -2387,8 +2371,8 @@ Best regards,
 
             await Storage.deleteEmployee(id);
             this.showNotification(`Employee ${name} deleted successfully`);
-            this.renderTeamPage();
-            this.renderEmployeesPage(); // Sync with new Employees module
+            this.renderEmployeesPage();
+
         } catch (error) {
             console.error('Error deleting employee:', error);
             this.showNotification('Failed to delete employee: ' + error.message, 'error');
@@ -2454,29 +2438,58 @@ Best regards,
         return date.toLocaleDateString('en-US', options);
     },
 
-    showNotification(message) {
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 2rem;
-            right: 2rem;
-            background: #3B82F6;
-            color: white;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            z-index: 10000;
-            animation: slideIn 0.3s ease;
-        `;
-        notification.textContent = message;
+    showNotification(message, type = 'info') {
+        let container = document.getElementById('notification-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'notification-toast-container';
+            document.body.appendChild(container);
+        }
 
-        document.body.appendChild(notification);
+        const notification = document.createElement('div');
+        notification.className = `notification-toast ${type}`;
+
+        let iconSvg = '';
+        let title = '';
+
+        if (type === 'success') {
+            title = 'Success';
+            iconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+        } else if (type === 'error') {
+            title = 'Error';
+            iconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+        } else {
+            title = 'Information';
+            iconSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+        }
+
+        notification.innerHTML = `
+            <div class="toast-icon">
+                ${iconSvg}
+            </div>
+            <div class="toast-content">
+                <div class="toast-title">${title}</div>
+                <div class="toast-message">${message}</div>
+            </div>
+            <div class="toast-close" onclick="this.parentElement.remove()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </div>
+        `;
+
+        container.appendChild(notification);
+
+        // Slide In Animation (Handled by CSS, but we trigger it)
+        requestAnimationFrame(() => {
+            notification.classList.add('show');
+        });
 
         setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease';
+            notification.classList.remove('show');
+            notification.classList.add('hide');
             setTimeout(() => {
-                document.body.removeChild(notification);
+                if (notification.parentElement) notification.remove();
             }, 300);
-        }, 3000);
+        }, 4000);
     },
 
     togglePasswordVisibility(inputId, toggleEl) {

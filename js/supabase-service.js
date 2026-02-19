@@ -32,7 +32,7 @@ window.SupabaseService = {
             password,
             options: {
                 data: { full_name: name, role: 'Admin' },
-                emailRedirectTo: this._getRedirectUrl()
+                emailRedirectTo: this._getSignupRedirectUrl()
             }
         });
         if (error) throw error;
@@ -369,11 +369,21 @@ window.SupabaseService = {
 
     async deleteUser(id) {
         if (!window.supabase) throw new Error('Supabase not initialized');
-        const { error } = await window.supabase
-            .from('users')
-            .delete()
-            .eq('id', id);
-        if (error) throw error;
+
+        // Use custom RPC function to delete from AUTH.USERS (and cascade to public.users)
+        // This requires the function to be defined in SQL with security definer
+        const { error } = await window.supabase.rpc('delete_user_account', { user_id: id });
+
+        if (error) {
+            console.warn('RPC delete failed, falling back to public table delete:', error);
+            // Fallback: Delete from public.users only (better than nothing)
+            const { error: fallbackError } = await window.supabase
+                .from('users')
+                .delete()
+                .eq('id', id);
+
+            if (fallbackError) throw fallbackError;
+        }
         return true;
     },
 

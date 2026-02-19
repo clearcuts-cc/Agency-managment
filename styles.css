@@ -1402,3 +1402,103 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
     background: rgba(239, 68, 68, 0.2);
     border-color: #EF4444;
 }
+
+/* ===== Toast Notifications (LocalSend Style) ===== */
+#notification-toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 10000;
+    pointer-events: none;
+    /* Allow clicking through container */
+}
+
+.notification-toast {
+    background: rgba(28, 28, 30, 0.85);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    color: white;
+    padding: 16px;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    min-width: 300px;
+    max-width: 400px;
+    pointer-events: auto;
+    /* Enable clicking on toast */
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateX(100%) scale(0.9);
+    opacity: 0;
+}
+
+.notification-toast.show {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+}
+
+.notification-toast.hide {
+    transform: translateX(100%) scale(0.9);
+    opacity: 0;
+    margin-bottom: -60px;
+    /* Collapse space */
+}
+
+.toast-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.notification-toast.success .toast-icon {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10B981;
+}
+
+.notification-toast.error .toast-icon {
+    background: rgba(239, 68, 68, 0.15);
+    color: #EF4444;
+}
+
+.notification-toast.info .toast-icon {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3B82F6;
+}
+
+.toast-content {
+    flex: 1;
+    padding-top: 2px;
+}
+
+.toast-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    line-height: 1.2;
+}
+
+.toast-message {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.4;
+}
+
+.toast-close {
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    padding: 4px;
+    margin: -4px -4px 0 0;
+    transition: color 0.2s;
+}
+
+.toast-close:hover {
+    color: white;
+}
