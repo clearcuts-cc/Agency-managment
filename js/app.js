@@ -597,7 +597,7 @@ const NewApp = {
             'cancel-edit-task': 'edit-task-modal',
             'cancel-edit-employee': 'edit-employee-modal',
             'cancel-edit-client': 'edit-client-modal',
-            'cancel-group': 'create-group-modal'
+            'cancel-team': 'create-team-modal'
         };
 
         Object.keys(cancelMap).forEach(id => {
@@ -664,10 +664,10 @@ const NewApp = {
         }
 
         // Helper: populate an assignee select
-        const populateAssigneeSelect = (groupEl, selectEl) => {
-            if (!groupEl || !selectEl) return;
+        const populateAssigneeSelect = (teamEl, selectEl) => {
+            if (!teamEl || !selectEl) return;
             if (isAdmin) {
-                groupEl.style.setProperty('display', 'block', 'important');
+                teamEl.style.setProperty('display', 'block', 'important');
                 selectEl.innerHTML = '<option value="">Select Employee</option>';
                 if (employees.length === 0) {
                     selectEl.innerHTML += '<option value="">No Employees Found</option>';
@@ -680,14 +680,14 @@ const NewApp = {
                     });
                 }
             } else {
-                groupEl.style.display = 'none';
+                teamEl.style.display = 'none';
             }
         };
 
         // Helper: populate a client select
-        const populateClientSelect = (groupEl, selectEl) => {
+        const populateClientSelect = (teamEl, selectEl) => {
             if (!selectEl) return;
-            if (groupEl) groupEl.style.setProperty('display', isAdmin ? 'block' : 'none', 'important');
+            if (teamEl) teamEl.style.setProperty('display', isAdmin ? 'block' : 'none', 'important');
             selectEl.innerHTML = '<option value="">Select Client</option>';
             if (clients.length === 0) {
                 selectEl.innerHTML += '<option value="">No Clients Found</option>';
@@ -703,7 +703,7 @@ const NewApp = {
 
         // 1. Create Task Modal dropdowns
         populateAssigneeSelect(
-            document.getElementById('task-assignee-group'),
+            document.getElementById('task-assignee-team'),
             document.getElementById('task-assignee')
         );
         populateClientSelect(
@@ -713,11 +713,11 @@ const NewApp = {
 
         // 2. Edit Task Modal dropdowns
         populateAssigneeSelect(
-            document.getElementById('edit-task-assignee-group'),
+            document.getElementById('edit-task-assignee-team'),
             document.getElementById('edit-task-assignee')
         );
         populateClientSelect(
-            document.getElementById('edit-task-client-group'),
+            document.getElementById('edit-task-client-team'),
             document.getElementById('edit-task-client')
         );
     },
@@ -761,8 +761,8 @@ const NewApp = {
                 this.renderAnalytics();
             } else if (pageId === 'tasks' || pageId === 'projects') {
                 this.renderProjectsPage();
-            } else if (pageId === 'group' || pageId === 'client-approvals') {
-                this.renderGroupPage();
+            } else if (pageId === 'teams' || pageId === 'client-approvals') {
+                this.renderTeamsPage();
             } else if (pageId === 'employees') {
                 this.renderEmployeesPage();
             } else if (pageId === 'clients') {
@@ -837,11 +837,11 @@ const NewApp = {
             });
         }
 
-        const groupForm = document.getElementById('group-form');
-        if (groupForm) {
-            groupForm.addEventListener('submit', (e) => {
+        const teamForm = document.getElementById('team-form');
+        if (teamForm) {
+            teamForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                this.handleCreateGroupSubmit();
+                this.handleCreateTeamSubmit();
             });
         }
 
@@ -955,9 +955,9 @@ const NewApp = {
         // Admin and Group Leaders can change assignee and client
         const currentUser = Auth.getCurrentUser();
         const isAdmin = currentUser && currentUser.role && currentUser.role.toLowerCase() === 'admin';
-        const isGroupLeader = currentUser && (currentUser.role === 'Group Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Group Leader'));
+        const isTeamLeader = currentUser && (currentUser.role === 'Team Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Team Leader'));
 
-        if (isAdmin || isGroupLeader) {
+        if (isAdmin || isTeamLeader) {
             const assigneeSelect = document.getElementById('edit-task-assignee');
             const clientSelect = document.getElementById('edit-task-client');
 
@@ -1018,22 +1018,22 @@ const NewApp = {
     async deleteCurrentTask() {
         const currentUser = Auth.getCurrentUser();
         const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
-        const isGroupLeader = currentUser && (currentUser.role === 'Group Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Group Leader'));
+        const isTeamLeader = currentUser && (currentUser.role === 'Team Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Team Leader'));
 
         const taskId = document.getElementById('edit-task-id').value;
         if (!taskId) return;
 
-        // Scoping check for Group Leader
-        if (!isAdmin && isGroupLeader) {
+        // Scoping check for Team Leader
+        if (!isAdmin && isTeamLeader) {
             const task = await Storage.getTaskById(taskId);
             // Since Storage.getTasks() (and thus getTaskById) is scoped for TLs,
             // if we can't find the task, it means it's outside their group.
             if (!task) {
-                this.showNotification('Permission Denied: You can only delete tasks within your group.', 'error');
+                this.showNotification('Permission Denied: You can only delete tasks within your team.', 'error');
                 return;
             }
         } else if (!isAdmin) {
-            this.showNotification('Permission Denied: Only Admins and Group Leaders can delete projects.', 'error');
+            this.showNotification('Permission Denied: Only Admins and Team Leaders can delete projects.', 'error');
             return;
         }
 
@@ -1093,27 +1093,27 @@ const NewApp = {
         const nameInput = document.getElementById('employee-name');
         const emailInput = document.getElementById('employee-email');
         const passInput = document.getElementById('employee-password');
-        const groupInput = document.getElementById('employee-group');
+        const teamInput = document.getElementById('employee-team');
 
         const name = nameInput.value.trim();
         const email = emailInput.value.trim();
         const password = passInput.value;
-        const group = null; // Group logic simplified per user request
+        const team = teamInput ? teamInput.value : null;
 
         // Use Auth to resolve creation
-        const result = await Auth.createEmployee(name, email, password, group);
+        const result = await Auth.createEmployee(name, email, password, team);
 
         if (result.success) {
             this.closeModal('employee-modal');
             this.showNotification(result.message || 'Employee account created successfully!');
 
             // Refresh Views
-            if (this.currentGroupId && this.currentGroupName === group) {
-                // If we are in the detail view of the group we just added a member to
-                this.renderGroupMembers(this.currentGroupName);
+            if (this.currentTeamId && this.currentTeamName === team) {
+                // If we are in the detail view of the team we just added a member to
+                this.renderTeamMembers(this.currentTeamName);
             } else {
                 // otherwise go back to main list
-                this.renderGroupPage();
+                this.renderTeamsPage();
             }
             this.renderEmployeesPage(); // Sync with new Employees module
 
@@ -1346,16 +1346,16 @@ const NewApp = {
         // Implement period filtering logic here
     },
 
-    // ===== Group Rendering & CRUD =====
-    async renderGroupPage() {
-        const groupsGrid = document.getElementById('groups-grid');
+    // ===== Team Rendering & CRUD =====
+    async renderTeamsPage() {
+        const teamsGrid = document.getElementById('teams-grid');
         try {
-            const createBtn = document.getElementById('create-group-btn');
+            const createBtn = document.getElementById('create-team-btn');
 
             // Reset Views
-            const detailView = document.getElementById('group-detail-view');
+            const detailView = document.getElementById('team-detail-view');
             if (detailView) detailView.style.display = 'none';
-            if (groupsGrid) groupsGrid.style.display = 'grid';
+            if (teamsGrid) teamsGrid.style.display = 'grid';
 
             // Check Permissions
             const currentUser = Auth.getCurrentUser();
@@ -1363,52 +1363,52 @@ const NewApp = {
 
             if (createBtn) createBtn.style.display = isAdmin ? 'flex' : 'none';
 
-            if (!groupsGrid) return;
+            if (!teamsGrid) return;
 
             // Fetch Data
-            const groups = await Storage.getGroups();
+            const teams = await Storage.getTeams();
             const employees = await Storage.getEmployees();
 
-            // Group Leader Scoping
-            let filteredGroups = groups;
-            if (!isAdmin && (currentUser.role === 'Group Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Group Leader'))) {
-                const tlGroupName = currentUser.group || (currentUser.user_metadata && currentUser.user_metadata.group);
-                if (tlGroupName) {
-                    filteredGroups = groups.filter(t => t.name === tlGroupName);
+            // Team Leader Scoping
+            let filteredTeams = teams;
+            if (!isAdmin && (currentUser.role === 'Team Leader' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Team Leader'))) {
+                const tlTeamName = currentUser.team || (currentUser.user_metadata && currentUser.user_metadata.team);
+                if (tlTeamName) {
+                    filteredTeams = teams.filter(t => t.name === tlTeamName);
                 } else {
-                    filteredGroups = [];
+                    filteredTeams = [];
                 }
             }
 
-            if (filteredGroups.length === 0) {
-                groupsGrid.innerHTML = `
+            if (filteredTeams.length === 0) {
+                teamsGrid.innerHTML = `
                     <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-secondary);">
                         <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.2;">👥</div>
-                        <p>${isAdmin ? 'No groups created yet.' : 'You are not assigned to any group.'}</p>
-                        ${isAdmin ? '<p style="font-size: 0.9rem; opacity: 0.8;">Click "Create Group" to get started.</p>' : ''}
+                        <p>${isAdmin ? 'No teams created yet.' : 'You are not assigned to any team.'}</p>
+                        ${isAdmin ? '<p style="font-size: 0.9rem; opacity: 0.8;">Click "Create Team" to get started.</p>' : ''}
                     </div>
                 `;
                 return;
             }
 
-            groupsGrid.innerHTML = filteredGroups.map(group => {
-                const groupEmployees = employees.filter(e => e.team === group.name || e.group === group.name);
-                const memberCount = groupEmployees.length;
+            teamsGrid.innerHTML = filteredTeams.map(team => {
+                const teamEmployees = employees.filter(e => e.team === team.name || e.group === team.name);
+                const memberCount = teamEmployees.length;
 
-                // Find leader for this group
-                const leader = groupEmployees.find(e => (e.role || '').toLowerCase() === 'team leader' || (e.role || '').toLowerCase() === 'tl' || (e.role || '').toLowerCase() === 'group leader');
+                // Find leader for this team
+                const leader = teamEmployees.find(e => (e.role || '').toLowerCase() === 'team leader' || (e.role || '').toLowerCase() === 'tl');
                 const leaderName = leader ? leader.name : 'No Leader Assigned';
 
                 return `
-                <div class="stat-card group-card" onclick="NewApp.openGroupDetail('${group.id}')" style="cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color); position: relative; padding-bottom: 4.5rem;">
+                <div class="stat-card team-card" onclick="NewApp.openTeamDetail('${team.id}')" style="cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color); position: relative; padding-bottom: 4.5rem;">
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
                         <div style="width: 100%;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${this.escapeHtml(group.name)}</h3>
+                                <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${this.escapeHtml(team.name)}</h3>
                                 <span style="font-size: 0.75rem; padding: 4px 10px; background: rgba(79, 70, 229, 0.1); color: var(--primary-color); border-radius: 20px; font-weight: 600;">ACTIVE</span>
                             </div>
                             <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                                ${this.escapeHtml(group.description || 'Our agency task force responsible for creative delivery and client satisfaction.')}
+                                ${this.escapeHtml(team.description || 'Our agency task force responsible for creative delivery and client satisfaction.')}
                             </p>
                         </div>
                     </div>
@@ -1419,7 +1419,7 @@ const NewApp = {
                                 ${Auth.getInitials(leaderName)}
                             </div>
                             <div>
-                                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Group Leader</div>
+                                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Team Leader</div>
                                 <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">${this.escapeHtml(leaderName)}</div>
                             </div>
                         </div>
@@ -1438,14 +1438,14 @@ const NewApp = {
                     </div>
 
                     <div style="position: absolute; bottom: 1.25rem; left: 1rem; right: 1rem; display: flex; gap: 0.5rem;">
-                        <button class="btn btn-primary" style="flex: 1; padding: 0.6rem; font-size: 0.85rem; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 0.5rem; text-transform: uppercase; font-weight: 700;" onclick="event.stopPropagation(); NewApp.openGroupDetail('${group.id}')">
-                            ACCESS GROUP
+                        <button class="btn btn-primary" style="flex: 1; padding: 0.6rem; font-size: 0.85rem; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 0.5rem; text-transform: uppercase; font-weight: 700;" onclick="event.stopPropagation(); NewApp.openTeamDetail('${team.id}')">
+                            ACCESS TEAM
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3">
                                 <polyline points="9 18 15 12 9 6"></polyline>
                             </svg>
                         </button>
                         ${isAdmin ? `
-                        <button class="action-btn delete" onclick="event.stopPropagation(); NewApp.deleteGroup('${group.id}', '${this.escapeHtml(group.name)}')" title="Delete Group" style="color: #ef4444; padding: 8px; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; background: rgba(239, 68, 68, 0.1);">
+                        <button class="action-btn delete" onclick="event.stopPropagation(); NewApp.deleteTeam('${team.id}', '${this.escapeHtml(team.name)}')" title="Delete Team" style="color: #ef4444; padding: 8px; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; background: rgba(239, 68, 68, 0.1);">
                             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"></polyline>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -1457,9 +1457,9 @@ const NewApp = {
         `;
             }).join('');
         } catch (error) {
-            console.error('Error rendering groups page:', error);
-            if (groupsGrid) {
-                groupsGrid.innerHTML = `
+            console.error('Error rendering teams page:', error);
+            if (teamsGrid) {
+                teamsGrid.innerHTML = `
                     <div style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 2rem;">
                         <p>Error loading groups. Please try refreshing the page.</p>
                         <p style="font-size: 0.8rem; opacity: 0.7;">${this.escapeHtml(error.message)}</p>
@@ -1550,7 +1550,7 @@ const NewApp = {
 
 
     toggleMembersDropdown() {
-        const list = document.getElementById('create-group-members-list');
+        const list = document.getElementById('create-team-members-list');
         const trigger = document.getElementById('members-dropdown-trigger');
         if (!list) return;
 
@@ -1563,12 +1563,12 @@ const NewApp = {
         }
     },
 
-    async openCreateGroupModal() {
-        this.openModal('create-group-modal');
+    async openCreateTeamModal() {
+        this.openModal('create-team-modal');
 
         // Populate Leader and Members lists
-        const leaderSelect = document.getElementById('create-group-leader');
-        const membersList = document.getElementById('create-group-members-list');
+        const leaderSelect = document.getElementById('create-team-leader');
+        const membersList = document.getElementById('create-team-members-list');
         const dropdownLabel = document.getElementById('members-dropdown-label');
 
         if (!leaderSelect || !membersList) return;
@@ -1617,12 +1617,12 @@ const NewApp = {
             }
         } catch (error) {
             console.error('Error populating team modal:', error);
-            this.showNotification('Error loading employees for group creation.', 'error');
+            this.showNotification('Error loading employees for team creation.', 'error');
         }
     },
 
     updateMembersLabel() {
-        const checkboxes = document.querySelectorAll('#create-group-members-list input[type="checkbox"]:checked');
+        const checkboxes = document.querySelectorAll('#create-team-members-list input[type="checkbox"]:checked');
         const label = document.getElementById('members-dropdown-label');
         if (!label) return;
 
@@ -1635,20 +1635,20 @@ const NewApp = {
         }
     },
 
-    async handleCreateGroupSubmit() {
-        const nameInput = document.getElementById('create-group-name');
-        const descInput = document.getElementById('create-group-desc');
+    async handleCreateTeamSubmit() {
+        const nameInput = document.getElementById('create-team-name');
+        const descInput = document.getElementById('create-team-desc');
 
         const name = nameInput.value.trim();
         const desc = descInput.value.trim();
 
-        const leaderId = document.getElementById('create-group-leader').value;
+        const leaderId = document.getElementById('create-team-leader').value;
         // Collect checked members
-        const checkboxes = document.querySelectorAll('#create-group-members-list input[type="checkbox"]:checked');
+        const checkboxes = document.querySelectorAll('#create-team-members-list input[type="checkbox"]:checked');
         const memberIds = Array.from(checkboxes).map(cb => cb.value);
 
         if (!name || !leaderId) {
-            this.showNotification('Group name and Leader are required', 'error');
+            this.showNotification('Team name and Leader are required', 'error');
             return;
         }
 
@@ -1661,7 +1661,7 @@ const NewApp = {
             const leader = employees.find(e => e.id === leaderId);
 
             if (leader) {
-                // Update Leader role and group in Supabase/Local
+                // Update Leader role and team in Supabase/Local
                 if (typeof SupabaseService !== 'undefined' && window.supabase) {
                     await window.supabase.from('users').update({ role: 'Team Leader', team: name }).eq('id', leaderId);
                 } else {
@@ -1673,12 +1673,12 @@ const NewApp = {
                 // Send Notification to Leader
                 await NotificationService.createNotification(
                     leaderId,
-                    `You have been appointed as the Group Leader for "${name}".You now have management access for this group.`,
+                    `You have been appointed as the Team Leader for "${name}".You now have management access for this team.`,
                     'success'
                 );
             }
 
-            // 3. Assign Members to group
+            // 3. Assign Members to team
             for (const mId of memberIds) {
                 if (typeof SupabaseService !== 'undefined' && window.supabase) {
                     await window.supabase.from('users').update({ team: name }).eq('id', mId);
@@ -1692,28 +1692,28 @@ const NewApp = {
                 if (mId !== leaderId) {
                     await NotificationService.createNotification(
                         mId,
-                        `You have been added to the new group: "${name}".`,
+                        `You have been added to the new team: "${name}".`,
                         'info'
                     );
                 }
             }
 
-            this.showNotification(`Group "${name}" created with ${memberIds.length} members!`, 'success');
-            this.closeModal('create-group-modal');
+            this.showNotification(`Team "${name}" created with ${memberIds.length} members!`, 'success');
+            this.closeModal('create-team-modal');
 
             // Reset form
             nameInput.value = '';
             descInput.value = '';
-            this.renderGroupPage();
+            this.renderTeamsPage();
             if (this.renderEmployeesPage) this.renderEmployeesPage(); // Sync Employees module
         } catch (error) {
-            console.error('Error creating group:', error);
-            this.showNotification('Failed to create group: ' + error.message, 'error');
+            console.error('Error creating team:', error);
+            this.showNotification('Failed to create team: ' + error.message, 'error');
         }
     },
 
-    async deleteGroup(id, name) {
-        if (!confirm(`Are you sure you want to delete the group "${name}" ? This will NOT delete the employees, but they will become unassigned.`)) return;
+    async deleteTeam(id, name) {
+        if (!confirm(`Are you sure you want to delete the team "${name}" ? This will NOT delete the employees, but they will become unassigned.`)) return;
 
         try {
             // Optional: Update users who were in this team to remove team assignment?
@@ -1729,66 +1729,67 @@ const NewApp = {
             // So if we re-create "Marketing", they rejoin? Yes.
             // Text based linking is loose but flexible. 
 
-            await Storage.deleteGroup(id);
-            this.showNotification('Group deleted successfully', 'success');
-            this.renderGroupPage();
+            await Storage.deleteTeam(id);
+            this.showNotification('Team deleted successfully', 'success');
+            this.renderTeamsPage();
         } catch (error) {
-            console.error('Error deleting group:', error);
-            this.showNotification('Failed to delete group', 'error');
+            console.error('Error deleting team:', error);
+            this.showNotification('Failed to delete team', 'error');
         }
     },
 
-    // ===== Group Detail View =====
-    async openGroupDetail(groupId) {
-        document.getElementById('groups-grid').style.display = 'none';
-        document.getElementById('create-group-btn').style.display = 'none';
-        const detailView = document.getElementById('group-detail-view');
+    // ===== Team Detail View =====
+    async openTeamDetail(teamId) {
+        document.getElementById('teams-grid').style.display = 'none';
+        document.getElementById('create-team-btn').style.display = 'none';
+        const detailView = document.getElementById('team-detail-view');
         detailView.style.display = 'block';
 
-        const group = await Storage.getGroupById(groupId);
-        if (!group) {
-            this.closeGroupDetail();
+        const team = await Storage.getTeamById(teamId);
+        if (!team) {
+            this.closeTeamDetail();
             return;
         }
 
-        document.getElementById('detail-group-name').textContent = group.name;
-        document.getElementById('detail-group-desc').textContent = group.description || 'No description provided.';
+        document.getElementById('detail-team-name').textContent = team.name;
+        document.getElementById('detail-team-desc').textContent = team.description || 'No description provided.';
 
-        // Store current group info for member management
-        this.currentGroupName = group.name;
+        // Store current team info for member management
+        this.currentTeamName = team.name;
+        this.currentTeamId = team.id; // Correctly map ID for future use
 
-        await this.renderGroupMembers(group.name);
+        await this.renderTeamMembers(team.name);
     },
 
-    closeGroupDetail() {
-        document.getElementById('group-detail-view').style.display = 'none';
-        document.getElementById('groups-grid').style.display = 'grid';
+    closeTeamDetail() {
+        document.getElementById('team-detail-view').style.display = 'none';
+        document.getElementById('teams-grid').style.display = 'grid';
 
         const currentUser = Auth.getCurrentUser();
         const isAdmin = currentUser && (currentUser.role === 'Admin' || (currentUser.user_metadata && currentUser.user_metadata.role === 'Admin'));
-        if (isAdmin) document.getElementById('create-group-btn').style.display = 'flex';
+        if (isAdmin) document.getElementById('create-team-btn').style.display = 'flex';
 
-        this.currentGroupName = null;
+        this.currentTeamName = null;
     },
 
-    async renderGroupMembers(groupName) {
-        const grid = document.getElementById('group-members-grid');
+    async renderTeamMembers(teamName) {
+        const grid = document.getElementById('team-members-grid');
         if (!grid) return;
 
-        grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 2rem;">Loading group members...</p>';
+        grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 2rem;">Loading team members...</p>';
 
         try {
             const employees = await Storage.getEmployees();
-            const groupMembers = employees.filter(e => e.team === groupName || e.group === groupName);
+            const teamMembers = employees.filter(e => e.team === teamName || e.group === teamName);
 
-            if (groupMembers.length === 0) {
-                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--text-muted);">No members assigned to this group yet.</p>';
+            if (teamMembers.length === 0) {
+                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--text-muted);">No members assigned to this team yet.</p>';
                 return;
             }
 
-            grid.innerHTML = groupMembers.map(emp => {
+            grid.innerHTML = teamMembers.map(emp => {
                 const initials = emp.avatar || (emp.name ? Auth.getInitials(emp.name) : 'EE');
-                const isLeader = (emp.role || '').toLowerCase() === 'team leader' || (emp.role || '').toLowerCase() === 'tl' || (emp.role || '').toLowerCase() === 'group leader';
+                const isLeader = (emp.role || '').toLowerCase() === 'team leader' || (emp.role || '').toLowerCase() === 'tl';
 
                 return `
                 <div class="stat-card" style="padding: 1rem; display: flex; align-items: center; gap: 1rem; border: 1px solid var(--border-color);">
@@ -1804,7 +1805,7 @@ const NewApp = {
                 `;
             }).join('');
         } catch (error) {
-            console.error('Error rendering group members:', error);
+            console.error('Error rendering team members:', error);
             grid.innerHTML = '<p style="color: #ef4444; text-align: center;">Error loading members.</p>';
         }
     },
@@ -1823,13 +1824,13 @@ const NewApp = {
         if (groupInput) groupInput.value = '';
     },
 
-    openAddGroupMemberModal() {
-        // Open the existing Add Employee modal, but pre-fill the group
+    openAddTeamMemberModal() {
+        // Open the existing Add Employee modal, but pre-fill the team
         this.openAddEmployeeModal();
-        if (this.currentGroupName) {
+        if (this.currentTeamName) {
             setTimeout(() => {
                 const groupInput = document.getElementById('employee-team');
-                if (groupInput) groupInput.value = this.currentGroupName;
+                if (groupInput) groupInput.value = this.currentTeamName;
             }, 100);
         }
     },
@@ -2309,7 +2310,7 @@ const NewApp = {
 
             this.closeModal('edit-employee-modal');
             this.showNotification('Employee updated successfully!');
-            this.renderGroupPage(); // Correcting to renderGroupPage as per previous rebranding
+            this.renderTeamsPage(); // Correcting to renderTeamsPage as per previous rebranding
             this.renderEmployeesPage(); // Sync with new Employees module
         } catch (error) {
             console.error('Failed to update employee:', error);

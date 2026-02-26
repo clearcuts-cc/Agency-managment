@@ -107,14 +107,14 @@
                 <p style="font-size: 0.75rem; color: var(--text-muted); padding-left: 1rem; margin-bottom: 0.5rem;">
                     ADMIN</p>
                 <!-- Moved Projects to Main Menu -->
-                <a href="#" class="nav-item" data-page="group">
+                <a href="#" class="nav-item" data-page="teams">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                         <circle cx="9" cy="7" r="4"></circle>
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                         <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                     </svg>
-                    <span>Groups</span>
+                    <span>Teams</span>
                 </a>
                 <a href="#" class="nav-item" data-page="employees">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -602,51 +602,51 @@
             </div>
         </section>
 
-        <!-- Groups Page -->
-        <section id="group-page" class="page">
+        <!-- Teams Page -->
+        <section id="teams-page" class="page">
             <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <div>
-                        <h2 class="section-title" style="margin: 0;">Groups Management</h2>
+                        <h2 class="section-title" style="margin: 0;">Teams Management</h2>
                         <p class="section-subtitle" style="margin-top: 0.5rem;">Create and manage your agency's working
-                            groups
+                            teams
                         </p>
                     </div>
-                    <button class="btn btn-primary" onclick="NewApp.openCreateGroupModal()" id="create-group-btn"
+                    <button class="btn btn-primary" onclick="NewApp.openCreateTeamModal()" id="create-team-btn"
                         style="display: none;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                             style="width: 16px; height: 16px; margin-right: 8px;">
                             <path d="M12 5v14M5 12h14"></path>
                         </svg>
-                        Create Group
+                        Create Team
                     </button>
                 </div>
 
                 <!-- Teams Grid -->
-                <div class="teams-grid" id="groups-grid">
+                <div class="teams-grid" id="teams-grid">
                     <!-- Populated by JS -->
                 </div>
 
                 <!-- Team Detail View (Hidden by default) -->
-                <div id="group-detail-view" style="display: none; margin-top: 1rem;">
-                    <button class="btn btn-secondary" onclick="NewApp.closeGroupDetail()" style="margin-bottom: 1rem;">
-                        &larr; Back to Groups
+                <div id="team-detail-view" style="display: none; margin-top: 1rem;">
+                    <button class="btn btn-secondary" onclick="NewApp.closeTeamDetail()" style="margin-bottom: 1rem;">
+                        &larr; Back to Teams
                     </button>
                     <div class="glass-panel" style="padding: 1.5rem;">
                         <div
                             style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
                             <div>
-                                <h3 id="detail-group-name"
-                                    style="font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem;">Group Name</h3>
-                                <p id="detail-group-desc" style="color: var(--text-secondary);">Group Description</p>
+                                <h3 id="detail-team-name"
+                                    style="font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem;">Team Name</h3>
+                                <p id="detail-team-desc" style="color: var(--text-secondary);">Team Description</p>
                             </div>
-                            <button class="btn btn-primary" onclick="NewApp.openAddGroupMemberModal()">
+                            <button class="btn btn-primary" onclick="NewApp.openAddTeamMemberModal()">
                                 + Add Member
                             </button>
                         </div>
 
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;"
-                            id="group-members-grid">
+                            id="team-members-grid">
                             <!-- Populated by JS -->
                         </div>
                     </div>
@@ -868,16 +868,16 @@
         </section>
     </main>
 
-    <!-- Create Group Modal -->
-    <div class="modal" id="create-group-modal">
+    <!-- Create Team Modal -->
+    <div class="modal" id="create-team-modal">
         <div class="modal-content glass-modal" style="max-width: 550px; border: 1px solid rgba(255,255,255,0.1);">
             <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1.25rem;">
                 <div>
-                    <h3 class="modal-title" style="font-size: 1.5rem; letter-spacing: -0.02em;">Create New Group</h3>
+                    <h3 class="modal-title" style="font-size: 1.5rem; letter-spacing: -0.02em;">Create New Team</h3>
                     <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">Scale your agency
-                        production with specialized groups</p>
+                        production with specialized teams</p>
                 </div>
-                <button class="modal-close" id="close-group-modal">
+                <button class="modal-close" id="close-team-modal">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -885,32 +885,32 @@
                 </button>
             </div>
             <div class="modal-body" style="padding-top: 1.5rem;">
-                <form id="group-form">
+                <form id="team-form">
                     <div style="display: grid; grid-template-columns: 1fr; gap: 1.25rem;">
                         <div class="form-group">
-                            <label class="form-label" for="create-group-name"
-                                style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem; display: block;">Group
+                            <label class="form-label" for="create-team-name"
+                                style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem; display: block;">Team
                                 Name</label>
-                            <input type="text" class="form-input" id="create-group-name" required
+                            <input type="text" class="form-input" id="create-team-name" required
                                 placeholder="e.g. Marketing, Development, Post-Production"
                                 style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); padding: 0.875rem 1rem; font-size: 0.95rem;">
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label" for="create-group-desc"
+                            <label class="form-label" for="create-team-desc"
                                 style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem; display: block;">Purpose
                                 & Description</label>
-                            <textarea class="form-input" id="create-group-desc" rows="2"
+                            <textarea class="form-input" id="create-team-desc" rows="2"
                                 placeholder="Brief description of the team's objective..."
                                 style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); padding: 0.875rem 1rem; font-size: 0.95rem; resize: none;"></textarea>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label" for="create-group-leader"
+                            <label class="form-label" for="create-team-leader"
                                 style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem; display: block;">Appoint
-                                Group Leader</label>
+                                Team Leader</label>
                             <div style="position: relative;">
-                                <select class="form-select" id="create-group-leader" required
+                                <select class="form-select" id="create-team-leader" required
                                     style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); padding: 0.875rem 1rem; font-size: 0.95rem; appearance: none;">
                                     <option value="">Select a leader...</option>
                                 </select>
@@ -938,7 +938,7 @@
                                         <path d="M6 9l6 6 6-6"></path>
                                     </svg>
                                 </div>
-                                <div id="create-group-members-list"
+                                <div id="create-team-members-list"
                                     style="display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 220px; overflow-y: auto; background: #1A1A1A; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; z-index: 100; margin-top: 6px; padding: 0.5rem; box-shadow: 0 10px 40px rgba(0,0,0,0.5);"
                                     class="custom-scrollbar glass-panel">
                                     <!-- Populated by JS -->
@@ -952,17 +952,17 @@
                                     <line x1="12" y1="16" x2="12" y2="12"></line>
                                     <line x1="12" y1="8" x2="12.01" y2="8"></line>
                                 </svg>
-                                Select the employees who will join this new group
+                                Select the employees who will join this new team
                             </p>
                         </div>
                     </div>
 
                     <div class="form-actions" style="margin-top: 2rem; display: flex; gap: 1rem;">
-                        <button type="button" class="btn btn-secondary" id="cancel-group"
+                        <button type="button" class="btn btn-secondary" id="cancel-team"
                             style="flex: 1; padding: 0.875rem; font-weight: 600; background: rgba(255,255,255,0.05);">Cancel</button>
                         <button type="submit" class="btn btn-primary"
                             style="flex: 2; padding: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);">
-                            Initialize Group
+                            Initialize Team
                         </button>
                     </div>
                 </form>
@@ -994,7 +994,7 @@
                     </div>
 
                     <!-- Assignee (Admin Only) -->
-                    <div class="form-group" id="task-assignee-group">
+                    <div class="form-group" id="task-assignee-team">
                         <label class="form-label" for="task-assignee">Assign To</label>
                         <select class="form-select" id="task-assignee">
                             <option value="">Select Employee</option>
@@ -1072,7 +1072,7 @@
                     </div>
                     <!-- Email field removed from Project modal -->
                     <!-- Assignee (Admin Only) -->
-                    <div class="form-group" id="edit-task-assignee-group" style="display: none;">
+                    <div class="form-group" id="edit-task-assignee-team" style="display: none;">
                         <label class="form-label" for="edit-task-assignee">Assign To</label>
                         <select class="form-select" id="edit-task-assignee">
                             <option value="">Select Employee</option>
@@ -1081,7 +1081,7 @@
                     </div>
 
                     <!-- Client Selection -->
-                    <div class="form-group" id="edit-task-client-group" style="display: none;">
+                    <div class="form-group" id="edit-task-client-team" style="display: none;">
                         <label class="form-label" for="edit-task-client">Client</label>
                         <select class="form-select" id="edit-task-client">
                             <!-- Populated by JS -->
@@ -1207,6 +1207,7 @@
                             </svg>
                         </span>
                     </div>
+                    <input type="hidden" id="employee-team">
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" id="cancel-employee">Cancel</button>
                         <button type="submit" class="btn btn-primary">Create Account</button>
